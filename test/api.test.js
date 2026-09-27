@@ -1,0 +1,178 @@
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createApp } from '../server/app.js';
+import { openDb } from '../server/db.js';
+
+const fakeGames = {
+  attribution: { label: 'Fake', url: 'https://example.com' },
+  async search(q) {
+    return { results: [{ id: 'rawg:1', name: `Result for ${q}`, image: null, genres: [], platforms: [] }], hasMore: false };
+  },
+};
+
+let server;
+let base;
+
+before(async () => {
+  const app = createApp({ db: openDb(':memory:'), games: fakeGames });
+  server = app.listen(0);
+  await new Promise((r) => server.once('listening', r));
+  base = `http://127.0.0.1:${server.address().port}/api`;
+});
+after(() => server.close());
+
+/** Minimal cookie-keeping client, one per simulated user. */
+function client() {
+  let cookie = '';
+  return async (method, path, body) => {
+    const res = await fetch(base + path, {
+      method,
+      headers: { ...(body !== undefined && { 'content-type': 'application/json' }), ...(cookie && { cookie }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return { status: res.status, body: await res.json() };
+  };
+}
+
+const sampleData = {
+  tiers: [
+    { id: 's', label: 'S', color: '#ff7f7f', items: [{ id: 'rawg:3498', name: 'GTA V', image: 'https://media.rawg.io/x.jpg' }] },
+    { id: 'a', label: 'A', color: '#ffbf7f', items: [] },
+  ],
+  pool: [{ id: 'custom:abc', name: 'My indie game', image: null }],
+};
+
+test('register, me, logout, login', async () => {
+  const c = client();
+  let r = await c('POST', '/auth/register', { username: 'alice', password: 'password123' });
+  assert.equal(r.status, 201);
+  r = await c('GET', '/auth/me');
+  assert.equal(r.body.user.username, 'alice');
+  r = await c('POST', '/auth/register', { username: 'ALICE', password: 'password123' });
+  assert.equal(r.status, 409);
+  await c('POST', '/auth/logout', {});
+  r = await c('GET', '/auth/me');
+  assert.equal(r.body.user, null);
+  r = await c('POST', '/auth/login', { username: 'alice', password: 'wrong-password' });
+  assert.equal(r.status, 401);
+  r = await c('POST', '/auth/login', { username: 'alice', password: 'password123' });
+  assert.equal(r.status, 200);
+});
+
+test('rejects weak credentials and non-JSON writes', async () => {
+  const c = client();
+  assert.equal((await c('POST', '/auth/register', { username: 'x', password: 'password123' })).status, 400);
+  assert.equal((await c('POST', '/auth/register', { username: 'bob_ok', password: 'short' })).status, 400);
+  const res = await fetch(`${base}/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'username=a&password=b',
+  });
+  assert.equal(res.status, 415);
+});
+
+test('game search proxies the provider', async () => {
+  const r = await client()('GET', '/games/search?q=zelda');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.results[0].name, 'Result for zelda');
+  assert.equal(r.body.source.label, 'Fake');
+});
+
+test('tier list lifecycle, visibility, likes, comments, remix', async () => {
+  const owner = client();
+  const other = client();
+  const anon = client();
+  await owner('POST', '/auth/register', { username: 'owner1', password: 'password123' });
+  await other('POST', '/auth/register', { username: 'other1', password: 'password123' });
+
+  assert.equal((await anon('POST', '/lists', { title: 'x', data: sampleData })).status, 401);
+
+  let r = await owner('POST', '/lists', { title: 'Best RPGs', description: 'mine', data: sampleData });
+  assert.equal(r.status, 201);
+  const list = r.body.list;
+  assert.equal(list.visibility, 'private');
+  assert.equal(list.itemCount, 2);
+  assert.equal(list.coverImage, 'https://media.rawg.io/x.jpg');
+  assert.equal(list.isOwner, true);
+
+  // Private lists are hidden from others and from the feed.
+  assert.equal((await other('GET', `/lists/${list.id}`)).status, 404);
+  assert.equal((await anon('GET', '/lists')).body.lists.length, 0);
+  assert.equal((await other('PUT', `/lists/${list.id}`, { title: 'hacked' })).status, 404);
+
+  // Unlisted: reachable by link, not in the feed.
+  await owner('PUT', `/lists/${list.id}`, { visibility: 'unlisted' });
+  assert.equal((await anon('GET', `/lists/${list.id}`)).status, 200);
+  assert.equal((await anon('GET', '/lists')).body.lists.length, 0);
+
+  // Public: in feed and profile, searchable by game name.
+  r = await owner('PUT', `/lists/${list.id}`, { visibility: 'public' });
+  assert.equal(r.body.list.title, 'Best RPGs');
+  assert.equal((await anon('GET', '/lists')).body.lists.length, 1);
+  assert.equal((await anon('GET', '/lists?q=GTA')).body.lists.length, 1);
+  assert.equal((await anon('GET', '/lists?q=nomatch')).body.lists.length, 0);
+  assert.equal((await anon('GET', '/users/owner1')).body.lists.length, 1);
+
+  // Likes are idempotent.
+  await other('POST', `/lists/${list.id}/like`, {});
+  r = await other('POST', `/lists/${list.id}/like`, {});
+  assert.equal(r.body.likeCount, 1);
+  r = await other('GET', `/lists/${list.id}`);
+  assert.equal(r.body.list.likedByMe, true);
+  r = await other('DELETE', `/lists/${list.id}/like`, {});
+  assert.equal(r.body.likeCount, 0);
+
+  // Comments: author or list owner may delete.
+  r = await other('POST', `/lists/${list.id}/comments`, { body: '  Great list!  ' });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.comment.body, 'Great list!');
+  const commentId = r.body.comment.id;
+  assert.equal((await anon('POST', `/lists/${list.id}/comments`, { body: 'hi' })).status, 401);
+  assert.equal((await other('POST', `/lists/${list.id}/comments`, { body: '   ' })).status, 400);
+  r = await anon('GET', `/lists/${list.id}/comments`);
+  assert.equal(r.body.comments.length, 1);
+  assert.equal(r.body.comments[0].canDelete, false);
+  assert.equal((await owner('DELETE', `/comments/${commentId}`, {})).status, 200);
+
+  // Remix creates a private copy that links back.
+  r = await other('POST', `/lists/${list.id}/copy`, {});
+  assert.equal(r.status, 201);
+  assert.equal(r.body.list.visibility, 'private');
+  assert.equal(r.body.list.forkedFrom.id, list.id);
+  assert.equal((await other('GET', '/lists/mine')).body.lists.length, 1);
+
+  // Delete.
+  assert.equal((await other('DELETE', `/lists/${list.id}`, {})).status, 404);
+  assert.equal((await owner('DELETE', `/lists/${list.id}`, {})).status, 200);
+  assert.equal((await anon('GET', `/lists/${list.id}`)).status, 404);
+});
+
+test('validates tier list data', async () => {
+  const c = client();
+  await c('POST', '/auth/register', { username: 'validator', password: 'password123' });
+  const bad = [
+    { title: '', data: sampleData },
+    { title: 'x', data: { tiers: [] } },
+    { title: 'x', data: { tiers: [{ id: 's', label: 'S', color: 'red', items: [] }] } },
+    { title: 'x', data: { tiers: [{ id: 's', label: 'S', color: '#ffffff', items: [{ id: 'evil:1', name: 'x' }] }] } },
+    {
+      title: 'x',
+      data: { tiers: [{ id: 's', label: 'S', color: '#ffffff', items: [{ id: 'rawg:1', name: 'x', image: 'javascript:alert(1)' }] }] },
+    },
+    {
+      title: 'x',
+      data: {
+        tiers: [{ id: 's', label: 'S', color: '#ffffff', items: [{ id: 'rawg:1', name: 'x' }] }],
+        pool: [{ id: 'rawg:1', name: 'dupe' }],
+      },
+    },
+    { title: 'x', visibility: 'everyone', data: sampleData },
+  ];
+  for (const body of bad) {
+    const r = await c('POST', '/lists', body);
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.ok(r.body.error);
+  }
+});
