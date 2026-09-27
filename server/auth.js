@@ -24,32 +24,31 @@ export async function verifyPassword(password, stored) {
 // Only a hash of the token is stored, so a leaked database can't be used to hijack sessions.
 const hashToken = (token) => createHash('sha256').update(token).digest('hex');
 
-export function createSession(db, userId) {
+export async function createSession(db, userId) {
   const token = randomBytes(32).toString('base64url');
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(
+  await db.run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [
     hashToken(token),
     userId,
     expiresAt,
-  );
+  ]);
   return { token, expiresAt };
 }
 
-export function destroySession(db, token) {
-  if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
+export async function destroySession(db, token) {
+  if (token) await db.run('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)]);
 }
 
-export function userForToken(db, token) {
+export async function userForToken(db, token) {
   if (!token) return null;
-  const row = db
-    .prepare(
-      `SELECT u.id, u.username, s.expires_at FROM sessions s
-       JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`,
-    )
-    .get(hashToken(token));
+  const row = await db.get(
+    `SELECT u.id, u.username, s.expires_at FROM sessions s
+     JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`,
+    [hashToken(token)],
+  );
   if (!row) return null;
   if (row.expires_at < Date.now()) {
-    destroySession(db, token);
+    await destroySession(db, token);
     return null;
   }
   return { id: row.id, username: row.username };

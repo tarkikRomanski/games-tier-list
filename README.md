@@ -22,7 +22,7 @@ snapshot of the game name and cover image, so saved lists keep working even if t
 
 ## Running locally
 
-Requires **Node.js 22.13+** (uses the built-in `node:sqlite`, no native modules).
+Requires **Node.js 22+**. Locally the data lives in a SQLite file, so there is nothing else to install.
 
 ```bash
 npm install
@@ -44,8 +44,34 @@ session cookie is only sent over HTTPS.
 | --- | --- | --- |
 | `RAWG_API_KEY` | – | Use RAWG instead of FreeToGame |
 | `PORT` | `3001` | HTTP port |
-| `DATABASE_PATH` | `./data/tierlist.db` | SQLite database file |
+| `DATABASE_URL` | – | libSQL/Turso URL, e.g. `libsql://my-db-me.turso.io` (required on Vercel) |
+| `DATABASE_AUTH_TOKEN` | – | Turso auth token |
+| `DATABASE_PATH` | `./data/tierlist.db` | Local SQLite file, used when `DATABASE_URL` is empty |
 | `SECURE_COOKIES` | `true` in production | Mark the session cookie `Secure` |
+
+## Deploying to Vercel
+
+Vercel functions have no persistent disk, so the database must be hosted. The app uses
+[Turso](https://turso.tech) (hosted SQLite, free tier) through the same code as the local file.
+
+1. **Create the database** (once):
+   ```bash
+   # install the CLI: https://docs.turso.tech/cli/installation
+   turso auth signup                      # or: turso auth login
+   turso db create games-tier-list
+   turso db show games-tier-list --url    # -> DATABASE_URL
+   turso db tokens create games-tier-list # -> DATABASE_AUTH_TOKEN
+   ```
+   Tables are created automatically on the first request.
+2. **Import the repo** at [vercel.com/new](https://vercel.com/new) → pick `games-tier-list`. The settings come from
+   `vercel.json` (build `npm run build`, output `dist`), so leave the defaults.
+3. **Add environment variables** in the import screen (or Project → Settings → Environment Variables):
+   `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `RAWG_API_KEY`.
+4. **Deploy.** Every push to the connected branch redeploys automatically.
+
+How it runs on Vercel: the built React app in `dist/` is served from Vercel's CDN, and every `/api/*` request is
+rewritten to one serverless function (`api/index.js`) that runs the same Express app as local development.
+Login rate limits are kept in memory, so on Vercel they apply per function instance.
 
 ## Tests
 
@@ -56,10 +82,13 @@ npm test
 ## Project layout
 
 ```
+api/
+  index.js      Vercel serverless entry point
 server/
   app.js        Express app: auth, games search, tier lists, likes, comments, profiles
   auth.js       password hashing, sessions, rate limiting
-  db.js         SQLite schema
+  config.js     builds the app from environment variables
+  db.js         schema + libSQL client (local SQLite file or Turso)
   games.js      RAWG / FreeToGame providers
   validate.js   input validation
 client/src/

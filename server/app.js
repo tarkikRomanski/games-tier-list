@@ -55,19 +55,25 @@ function listSummary(row) {
   };
 }
 
-export function createApp({ db, games, secureCookies = false, staticDir = null }) {
+export function createApp({ db: dbOrPromise, games, secureCookies = false, staticDir = null, trustProxy = 'loopback' }) {
+  // `db` may be a promise so serverless entry points can start handling requests before it is ready.
+  let db;
+  const dbReady = Promise.resolve(dbOrPromise).then((d) => (db = d));
+  dbReady.catch((err) => console.error('Database initialisation failed:', err));
+
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 'loopback');
+  app.set('trust proxy', trustProxy);
   app.use(express.json({ limit: '512kb' }));
 
   const authLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 30 });
   const writeLimiter = rateLimiter({ windowMs: 60 * 1000, max: 60 });
 
   // Resolve the logged-in user from the session cookie.
-  app.use((req, _res, next) => {
+  app.use('/api', async (req, _res, next) => {
+    await dbReady;
     req.sessionToken = parseCookies(req.headers.cookie)[SESSION_COOKIE];
-    req.user = userForToken(db, req.sessionToken);
+    req.user = await userForToken(db, req.sessionToken);
     next();
   });
 
@@ -103,33 +109,31 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
   api.post('/auth/register', async (req, res) => {
     if (!authLimiter(`reg:${req.ip}`)) throw new HttpError(429, 'Too many attempts, try again later');
     const { username, password } = validateCredentials(req.body);
-    if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) {
+    if (await db.get('SELECT 1 FROM users WHERE username = ?', [username])) {
       throw new HttpError(409, 'That username is taken');
     }
     const hash = await hashPassword(password);
-    const { lastInsertRowid } = db
-      .prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)')
-      .run(username, hash);
-    const { token } = createSession(db, Number(lastInsertRowid));
+    const { lastInsertRowid } = await db.run('INSERT INTO users (username, password_hash) VALUES (?, ?)', [username, hash]);
+    const { token } = await createSession(db, lastInsertRowid);
     setSessionCookie(res, token);
-    res.status(201).json({ user: { id: Number(lastInsertRowid), username } });
+    res.status(201).json({ user: { id: lastInsertRowid, username } });
   });
 
   api.post('/auth/login', async (req, res) => {
     if (!authLimiter(`login:${req.ip}`)) throw new HttpError(429, 'Too many attempts, try again later');
     const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    const row = db.prepare('SELECT id, username, password_hash FROM users WHERE username = ?').get(username);
+    const row = await db.get('SELECT id, username, password_hash FROM users WHERE username = ?', [username]);
     if (!row || !(await verifyPassword(password, row.password_hash))) {
       throw new HttpError(401, 'Wrong username or password');
     }
-    const { token } = createSession(db, row.id);
+    const { token } = await createSession(db, row.id);
     setSessionCookie(res, token);
     res.json({ user: { id: row.id, username: row.username } });
   });
 
-  api.post('/auth/logout', (req, res) => {
-    destroySession(db, req.sessionToken);
+  api.post('/auth/logout', async (req, res) => {
+    await destroySession(db, req.sessionToken);
     res.clearCookie(SESSION_COOKIE, { path: '/' });
     res.json({ ok: true });
   });
@@ -150,27 +154,27 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
   });
 
   // ---------- Tier lists ----------
-  const loadList = (id, viewerId) => {
+  const loadList = async (id, viewerId) => {
     const listId = Number(id);
     if (!Number.isInteger(listId) || listId < 1) return null;
-    return db.prepare(`${LIST_SELECT} WHERE l.id = :id`).get({ id: listId, viewer: viewerId ?? 0 });
+    return db.get(`${LIST_SELECT} WHERE l.id = :id`, { id: listId, viewer: viewerId ?? 0 });
   };
-  const loadViewableList = (req) => {
-    const row = loadList(req.params.id, req.user?.id);
+  const loadViewableList = async (req) => {
+    const row = await loadList(req.params.id, req.user?.id);
     if (!row || (row.visibility === 'private' && row.user_id !== req.user?.id)) {
       throw new HttpError(404, 'Tier list not found');
     }
     return row;
   };
-  const loadOwnList = (req) => {
-    const row = loadList(req.params.id, req.user.id);
+  const loadOwnList = async (req) => {
+    const row = await loadList(req.params.id, req.user.id);
     if (!row || row.user_id !== req.user.id) throw new HttpError(404, 'Tier list not found');
     return row;
   };
-  const listDetail = (row, viewer) => {
+  const listDetail = async (row, viewer) => {
     let forkedFrom = null;
     if (row.forked_from) {
-      const src = loadList(row.forked_from, viewer?.id);
+      const src = await loadList(row.forked_from, viewer?.id);
       if (src && (src.visibility === 'public' || src.user_id === viewer?.id)) {
         forkedFrom = { id: src.id, title: src.title, author: { username: src.author } };
       }
@@ -179,7 +183,7 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
   };
 
   // Community feed: public lists only.
-  api.get('/lists', (req, res) => {
+  api.get('/lists', async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const q = String(req.query.q ?? '').trim().slice(0, 100);
     const order = req.query.sort === 'top' ? 'like_count DESC, l.updated_at DESC' : 'l.updated_at DESC';
@@ -189,25 +193,24 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
       where += " AND (l.title LIKE :q ESCAPE '\\' OR l.description LIKE :q ESCAPE '\\' OR l.data LIKE :q ESCAPE '\\')";
       params.q = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     }
-    const rows = db.prepare(`${LIST_SELECT} WHERE ${where} ORDER BY ${order} LIMIT :limit OFFSET :offset`).all(params);
+    const rows = await db.all(`${LIST_SELECT} WHERE ${where} ORDER BY ${order} LIMIT :limit OFFSET :offset`, params);
     res.json({ lists: rows.slice(0, PAGE_SIZE).map(listSummary), hasMore: rows.length > PAGE_SIZE });
   });
 
-  api.get('/lists/mine', requireUser, (req, res) => {
-    const rows = db
-      .prepare(`${LIST_SELECT} WHERE l.user_id = :owner ORDER BY l.updated_at DESC`)
-      .all({ viewer: req.user.id, owner: req.user.id });
+  api.get('/lists/mine', requireUser, async (req, res) => {
+    const rows = await db.all(`${LIST_SELECT} WHERE l.user_id = :owner ORDER BY l.updated_at DESC`, {
+      viewer: req.user.id,
+      owner: req.user.id,
+    });
     res.json({ lists: rows.map(listSummary) });
   });
 
-  api.post('/lists', requireUser, (req, res) => {
+  api.post('/lists', requireUser, async (req, res) => {
     const input = validateListInput(req.body);
-    const { lastInsertRowid } = db
-      .prepare(
-        `INSERT INTO tier_lists (user_id, title, description, visibility, data, cover_image, item_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    const { lastInsertRowid } = await db.run(
+      `INSERT INTO tier_lists (user_id, title, description, visibility, data, cover_image, item_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
         req.user.id,
         input.title,
         input.description,
@@ -215,16 +218,17 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
         JSON.stringify(input.data),
         coverOf(input.data),
         countItems(input.data),
-      );
-    res.status(201).json({ list: listDetail(loadList(lastInsertRowid, req.user.id), req.user) });
+      ],
+    );
+    res.status(201).json({ list: await listDetail(await loadList(lastInsertRowid, req.user.id), req.user) });
   });
 
-  api.get('/lists/:id', (req, res) => {
-    res.json({ list: listDetail(loadViewableList(req), req.user) });
+  api.get('/lists/:id', async (req, res) => {
+    res.json({ list: await listDetail(await loadViewableList(req), req.user) });
   });
 
-  api.put('/lists/:id', requireUser, (req, res) => {
-    const row = loadOwnList(req);
+  api.put('/lists/:id', requireUser, async (req, res) => {
+    const row = await loadOwnList(req);
     const input = validateListInput(req.body, { partial: true });
     const next = {
       title: input.title ?? row.title,
@@ -232,52 +236,58 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
       visibility: input.visibility ?? row.visibility,
       data: input.data ?? JSON.parse(row.data),
     };
-    db.prepare(
+    await db.run(
       `UPDATE tier_lists SET title = ?, description = ?, visibility = ?, data = ?, cover_image = ?,
          item_count = ?, updated_at = datetime('now') WHERE id = ?`,
-    ).run(
-      next.title,
-      next.description,
-      next.visibility,
-      JSON.stringify(next.data),
-      coverOf(next.data),
-      countItems(next.data),
-      row.id,
+      [
+        next.title,
+        next.description,
+        next.visibility,
+        JSON.stringify(next.data),
+        coverOf(next.data),
+        countItems(next.data),
+        row.id,
+      ],
     );
-    res.json({ list: listDetail(loadList(row.id, req.user.id), req.user) });
+    res.json({ list: await listDetail(await loadList(row.id, req.user.id), req.user) });
   });
 
-  api.delete('/lists/:id', requireUser, (req, res) => {
-    const row = loadOwnList(req);
-    db.prepare('DELETE FROM tier_lists WHERE id = ?').run(row.id);
+  api.delete('/lists/:id', requireUser, async (req, res) => {
+    const row = await loadOwnList(req);
+    // Cascade by hand: hosted libSQL connections don't keep `PRAGMA foreign_keys` between requests.
+    await db.transaction([
+      ['DELETE FROM likes WHERE list_id = ?', [row.id]],
+      ['DELETE FROM comments WHERE list_id = ?', [row.id]],
+      ['UPDATE tier_lists SET forked_from = NULL WHERE forked_from = ?', [row.id]],
+      ['DELETE FROM tier_lists WHERE id = ?', [row.id]],
+    ]);
     res.json({ ok: true });
   });
 
   // Copy someone's list into your own account as a private draft.
-  api.post('/lists/:id/copy', requireUser, (req, res) => {
-    const src = loadViewableList(req);
+  api.post('/lists/:id/copy', requireUser, async (req, res) => {
+    const src = await loadViewableList(req);
     const title = `${src.title} (remix)`.slice(0, LIMITS.title);
-    const { lastInsertRowid } = db
-      .prepare(
-        `INSERT INTO tier_lists (user_id, title, description, visibility, data, cover_image, item_count, forked_from)
-         VALUES (?, ?, ?, 'private', ?, ?, ?, ?)`,
-      )
-      .run(req.user.id, title, src.description, src.data, src.cover_image, src.item_count, src.id);
-    res.status(201).json({ list: listDetail(loadList(lastInsertRowid, req.user.id), req.user) });
+    const { lastInsertRowid } = await db.run(
+      `INSERT INTO tier_lists (user_id, title, description, visibility, data, cover_image, item_count, forked_from)
+       VALUES (?, ?, ?, 'private', ?, ?, ?, ?)`,
+      [req.user.id, title, src.description, src.data, src.cover_image, src.item_count, src.id],
+    );
+    res.status(201).json({ list: await listDetail(await loadList(lastInsertRowid, req.user.id), req.user) });
   });
 
   // ---------- Likes ----------
-  api.post('/lists/:id/like', requireUser, (req, res) => {
-    const row = loadViewableList(req);
-    db.prepare('INSERT OR IGNORE INTO likes (user_id, list_id) VALUES (?, ?)').run(req.user.id, row.id);
-    const { n } = db.prepare('SELECT COUNT(*) AS n FROM likes WHERE list_id = ?').get(row.id);
+  api.post('/lists/:id/like', requireUser, async (req, res) => {
+    const row = await loadViewableList(req);
+    await db.run('INSERT OR IGNORE INTO likes (user_id, list_id) VALUES (?, ?)', [req.user.id, row.id]);
+    const { n } = await db.get('SELECT COUNT(*) AS n FROM likes WHERE list_id = ?', [row.id]);
     res.json({ liked: true, likeCount: n });
   });
 
-  api.delete('/lists/:id/like', requireUser, (req, res) => {
-    const row = loadViewableList(req);
-    db.prepare('DELETE FROM likes WHERE user_id = ? AND list_id = ?').run(req.user.id, row.id);
-    const { n } = db.prepare('SELECT COUNT(*) AS n FROM likes WHERE list_id = ?').get(row.id);
+  api.delete('/lists/:id/like', requireUser, async (req, res) => {
+    const row = await loadViewableList(req);
+    await db.run('DELETE FROM likes WHERE user_id = ? AND list_id = ?', [req.user.id, row.id]);
+    const { n } = await db.get('SELECT COUNT(*) AS n FROM likes WHERE list_id = ?', [row.id]);
     res.json({ liked: false, likeCount: n });
   });
 
@@ -290,47 +300,50 @@ export function createApp({ db, games, secureCookies = false, staticDir = null }
     canDelete: Boolean(viewer) && (c.user_id === viewer.id || list.user_id === viewer.id),
   });
 
-  api.get('/lists/:id/comments', (req, res) => {
-    const list = loadViewableList(req);
-    const rows = db
-      .prepare(
-        `SELECT c.*, u.username FROM comments c JOIN users u ON u.id = c.user_id
-         WHERE c.list_id = ? ORDER BY c.created_at ASC, c.id ASC LIMIT 500`,
-      )
-      .all(list.id);
+  api.get('/lists/:id/comments', async (req, res) => {
+    const list = await loadViewableList(req);
+    const rows = await db.all(
+      `SELECT c.*, u.username FROM comments c JOIN users u ON u.id = c.user_id
+       WHERE c.list_id = ? ORDER BY c.created_at ASC, c.id ASC LIMIT 500`,
+      [list.id],
+    );
     res.json({ comments: rows.map((c) => commentJson(c, list, req.user)) });
   });
 
-  api.post('/lists/:id/comments', requireUser, (req, res) => {
-    const list = loadViewableList(req);
+  api.post('/lists/:id/comments', requireUser, async (req, res) => {
+    const list = await loadViewableList(req);
     const body = cleanText(req.body?.body, { field: 'Comment', min: 1, max: LIMITS.comment });
-    const { lastInsertRowid } = db
-      .prepare('INSERT INTO comments (list_id, user_id, body) VALUES (?, ?, ?)')
-      .run(list.id, req.user.id, body);
-    const c = db
-      .prepare('SELECT c.*, u.username FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?')
-      .get(lastInsertRowid);
+    const { lastInsertRowid } = await db.run('INSERT INTO comments (list_id, user_id, body) VALUES (?, ?, ?)', [
+      list.id,
+      req.user.id,
+      body,
+    ]);
+    const c = await db.get('SELECT c.*, u.username FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?', [
+      lastInsertRowid,
+    ]);
     res.status(201).json({ comment: commentJson(c, list, req.user) });
   });
 
-  api.delete('/comments/:id', requireUser, (req, res) => {
-    const c = db
-      .prepare('SELECT c.id, c.user_id, l.user_id AS owner_id FROM comments c JOIN tier_lists l ON l.id = c.list_id WHERE c.id = ?')
-      .get(Number(req.params.id) || 0);
+  api.delete('/comments/:id', requireUser, async (req, res) => {
+    const c = await db.get(
+      'SELECT c.id, c.user_id, l.user_id AS owner_id FROM comments c JOIN tier_lists l ON l.id = c.list_id WHERE c.id = ?',
+      [Number(req.params.id) || 0],
+    );
     if (!c || (c.user_id !== req.user.id && c.owner_id !== req.user.id)) throw new HttpError(404, 'Comment not found');
-    db.prepare('DELETE FROM comments WHERE id = ?').run(c.id);
+    await db.run('DELETE FROM comments WHERE id = ?', [c.id]);
     res.json({ ok: true });
   });
 
   // ---------- Profiles ----------
-  api.get('/users/:username', (req, res) => {
-    const user = db
-      .prepare('SELECT id, username, created_at FROM users WHERE username = ?')
-      .get(String(req.params.username));
+  api.get('/users/:username', async (req, res) => {
+    const user = await db.get('SELECT id, username, created_at FROM users WHERE username = ?', [
+      String(req.params.username),
+    ]);
     if (!user) throw new HttpError(404, 'User not found');
-    const rows = db
-      .prepare(`${LIST_SELECT} WHERE l.user_id = :owner AND l.visibility = 'public' ORDER BY l.updated_at DESC`)
-      .all({ viewer: req.user?.id ?? 0, owner: user.id });
+    const rows = await db.all(
+      `${LIST_SELECT} WHERE l.user_id = :owner AND l.visibility = 'public' ORDER BY l.updated_at DESC`,
+      { viewer: req.user?.id ?? 0, owner: user.id },
+    );
     res.json({ user: { username: user.username, joinedAt: iso(user.created_at) }, lists: rows.map(listSummary) });
   });
 

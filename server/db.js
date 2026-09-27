@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createClient } from '@libsql/client';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -50,11 +50,39 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE INDEX IF NOT EXISTS idx_comments_list ON comments(list_id, created_at);
 `;
 
-export function openDb(file = ':memory:') {
-  if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
-  db.exec('PRAGMA foreign_keys = ON;');
-  if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
-  db.exec(SCHEMA);
+/**
+ * Opens the database. `url` is a libSQL URL:
+ *  - `file:data/tierlist.db` – a local SQLite file (default for local development)
+ *  - `libsql://<db>.turso.io` – a hosted Turso database (needed on Vercel, whose disk isn't persistent)
+ *  - `:memory:` – throwaway database for tests
+ * Returns a small async query helper; rows are plain objects keyed by column name.
+ */
+export async function openDb(url = ':memory:', authToken) {
+  if (url.startsWith('file:')) mkdirSync(dirname(url.slice('file:'.length)), { recursive: true });
+  const client = createClient({ url, authToken });
+  const normalize = (stmt, args) => (typeof stmt === 'string' ? { sql: stmt, args: args ?? [] } : stmt);
+
+  const db = {
+    client,
+    async get(sql, args) {
+      return (await client.execute(normalize(sql, args))).rows[0];
+    },
+    async all(sql, args) {
+      return (await client.execute(normalize(sql, args))).rows;
+    },
+    async run(sql, args) {
+      const r = await client.execute(normalize(sql, args));
+      return { lastInsertRowid: r.lastInsertRowid === undefined ? undefined : Number(r.lastInsertRowid), changes: r.rowsAffected };
+    },
+    /** Runs several statements in one transaction: [[sql, args], ...]. */
+    async transaction(statements) {
+      await client.batch(statements.map(([sql, args]) => normalize(sql, args)), 'write');
+    },
+  };
+
+  if (!url.startsWith('libsql:') && !url.startsWith('https:') && !url.startsWith('wss:')) {
+    await client.execute('PRAGMA foreign_keys = ON');
+  }
+  await client.executeMultiple(SCHEMA);
   return db;
 }
