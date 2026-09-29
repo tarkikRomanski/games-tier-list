@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useI18n } from '../i18n/index.jsx';
 
 /** Profile image, or an initial-letter avatar when the user has none. */
 export function Avatar({ name, src, size = 'md' }) {
@@ -35,8 +36,9 @@ export function GoogleMark({ size = 18 }) {
 
 /** Placeholder grid shaped like a row of list cards. */
 export function SkeletonGrid({ count = 6 }) {
+  const { t } = useI18n();
   return (
-    <div className="grid" aria-busy="true" aria-label="Loading">
+    <div className="grid" aria-busy="true" aria-label={t('common.loading')}>
       {Array.from({ length: count }, (_, i) => (
         <div className="card card-skeleton" key={i}>
           <div className="card-cover skeleton" />
@@ -52,8 +54,9 @@ export function SkeletonGrid({ count = 6 }) {
 
 /** Placeholder shaped like a tier board. */
 export function SkeletonBoard({ rows = 5 }) {
+  const { t } = useI18n();
   return (
-    <div className="board" aria-busy="true" aria-label="Loading">
+    <div className="board" aria-busy="true" aria-label={t('common.loading')}>
       {Array.from({ length: rows }, (_, i) => (
         <div className="tier-row" key={i}>
           <div className="tier-label skeleton" />
@@ -80,9 +83,10 @@ export function EmptyState({ icon: Icon, title, children, action }) {
 }
 
 export function NotFound() {
+  const { t } = useI18n();
   return (
-    <EmptyState title="Page not found" action={<Link to="/" className="btn">Back to the community</Link>}>
-      That link doesn&apos;t lead anywhere.
+    <EmptyState title={t('notFound.title')} action={<Link to="/" className="btn">{t('common.backToCommunity')}</Link>}>
+      {t('notFound.body')}
     </EmptyState>
   );
 }

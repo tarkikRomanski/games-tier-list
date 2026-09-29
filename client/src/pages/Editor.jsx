@@ -6,11 +6,13 @@ import GameSearch from '../components/GameSearch.jsx';
 import GameTile from '../components/GameTile.jsx';
 import { SkeletonBoard } from '../components/ui.jsx';
 import { TIER_PALETTE, emptyTierData, inkFor, newId, tierLabelSize } from '../util.js';
+import { useI18n } from '../i18n/index.jsx';
 
 const POOL = '__pool__';
 
 /** Multi-line tier name field that wraps and grows with its content. Enter commits instead of adding a line break. */
 function TierLabelInput({ value, onChange }) {
+  const { t } = useI18n();
   const ref = useRef(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -25,7 +27,7 @@ function TierLabelInput({ value, onChange }) {
       rows={1}
       value={value}
       maxLength={40}
-      aria-label="Tier name"
+      aria-label={t('editor.tierName')}
       onChange={(e) => onChange(e.target.value.replace(/\s*\n\s*/g, ' '))}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -38,9 +40,9 @@ function TierLabelInput({ value, onChange }) {
 }
 
 const VISIBILITY_OPTIONS = [
-  { value: 'private', label: 'Private', hint: 'Only you', Icon: Lock },
-  { value: 'unlisted', label: 'Unlisted', hint: 'Anyone with the link', Icon: LinkSimple },
-  { value: 'public', label: 'Public', hint: 'Shared with the community', Icon: Globe },
+  { value: 'private', Icon: Lock },
+  { value: 'unlisted', Icon: LinkSimple },
+  { value: 'public', Icon: Globe },
 ];
 
 /** Move an item to a container (tier id or POOL), optionally before another item. Returns new data. */
@@ -66,6 +68,7 @@ function moveItem(data, itemId, to, beforeId = null) {
 export default function Editor() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const isNew = !id;
 
   const [title, setTitle] = useState('');
@@ -153,7 +156,7 @@ export default function Editor() {
   const addTier = () =>
     update((d) => ({
       ...d,
-      tiers: [...d.tiers, { id: newId(), label: 'New', color: TIER_PALETTE[d.tiers.length % TIER_PALETTE.length], items: [] }],
+      tiers: [...d.tiers, { id: newId(), label: t('editor.newTier'), color: TIER_PALETTE[d.tiers.length % TIER_PALETTE.length], items: [] }],
     }));
 
   // ----- drag & drop (mouse) and tap-to-move (touch/keyboard) -----
@@ -224,7 +227,7 @@ export default function Editor() {
       <button
         type="button"
         className="tile-remove"
-        aria-label={`Remove ${item.name}`}
+        aria-label={t('editor.remove', { name: item.name })}
         onClick={(e) => {
           e.stopPropagation();
           removeItem(item.id);
@@ -264,7 +267,7 @@ export default function Editor() {
       <div className="empty">
         <h2>{loadError}</h2>
         <Link to="/my" className="btn">
-          Back to my lists
+          {t('editor.backToMy')}
         </Link>
       </div>
     );
@@ -273,12 +276,12 @@ export default function Editor() {
     <div className="editor">
       <form className="editor-meta" onSubmit={save}>
         <label className="sr-only" htmlFor="list-title">
-          Title
+          {t('editor.title')}
         </label>
         <input
           id="list-title"
           className="input input-title"
-          placeholder="Tier list title, e.g. Best RPGs of all time"
+          placeholder={t('editor.titlePlaceholder')}
           value={title}
           maxLength={100}
           onChange={(e) => {
@@ -288,13 +291,13 @@ export default function Editor() {
           required
         />
         <label className="sr-only" htmlFor="list-description">
-          Description
+          {t('editor.description')}
         </label>
         <textarea
           id="list-description"
           className="input"
           rows={2}
-          placeholder="Description (optional)"
+          placeholder={t('editor.descriptionPlaceholder')}
           value={description}
           maxLength={1000}
           onChange={(e) => {
@@ -304,9 +307,9 @@ export default function Editor() {
         />
         <div className="editor-actions">
           <fieldset className="segmented">
-            <legend className="sr-only">Visibility</legend>
-            {VISIBILITY_OPTIONS.map(({ value, label, hint, Icon }) => (
-              <label key={value} className={visibility === value ? 'segmented-active' : ''} title={hint}>
+            <legend className="sr-only">{t('editor.visibility')}</legend>
+            {VISIBILITY_OPTIONS.map(({ value, Icon }) => (
+              <label key={value} className={visibility === value ? 'segmented-active' : ''} title={t(`visibility.${value}Hint`)}>
                 <input
                   type="radio"
                   name="visibility"
@@ -318,19 +321,19 @@ export default function Editor() {
                   }}
                 />
                 <Icon size={16} aria-hidden="true" />
-                {label}
+                {t(`visibility.${value}`)}
               </label>
             ))}
           </fieldset>
           <span className="spacer" />
-          {dirty && <span className="unsaved small">Unsaved changes</span>}
+          {dirty && <span className="unsaved small">{t('editor.unsaved')}</span>}
           <button className="btn" type="submit" disabled={saving || !title.trim()}>
             <FloppyDisk size={18} aria-hidden="true" />
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('common.saving') : t('editor.save')}
           </button>
           <button className="btn btn-primary" type="button" disabled={saving || !title.trim()} onClick={saveAndView}>
             <ArrowSquareOut size={18} aria-hidden="true" />
-            Save &amp; view
+            {t('editor.saveView')}
           </button>
         </div>
         {error && (
@@ -343,7 +346,7 @@ export default function Editor() {
       <div className="editor-layout">
         <section>
           <p className="muted small hint">
-            Drag games between tiers, or tap a game and then tap a tier to move it. Click a tier label to rename it.
+            {t('editor.hint')}
           </p>
           <div className="board board-editable">
             {data.tiers.map((tier, i) => (
@@ -358,15 +361,15 @@ export default function Editor() {
                   {tier.items.map((item) => renderTile(item, tier.id))}
                 </div>
                 <div className="tier-controls">
-                  <label className="swatch" style={{ background: tier.color }} title="Tier color">
+                  <label className="swatch" style={{ background: tier.color }} title={t('editor.tierColor')}>
                     <input
                       type="color"
                       value={tier.color}
-                      aria-label="Tier color"
+                      aria-label={t('editor.tierColor')}
                       onChange={(e) => editTier(tier.id, { color: e.target.value })}
                     />
                   </label>
-                  <button type="button" className="icon-btn icon-btn-sm" onClick={() => moveTier(i, -1)} disabled={i === 0} aria-label="Move tier up">
+                  <button type="button" className="icon-btn icon-btn-sm" onClick={() => moveTier(i, -1)} disabled={i === 0} aria-label={t('editor.moveUp')}>
                     <CaretUp size={16} weight="bold" />
                   </button>
                   <button
@@ -374,7 +377,7 @@ export default function Editor() {
                     className="icon-btn icon-btn-sm"
                     onClick={() => moveTier(i, 1)}
                     disabled={i === data.tiers.length - 1}
-                    aria-label="Move tier down"
+                    aria-label={t('editor.moveDown')}
                   >
                     <CaretDown size={16} weight="bold" />
                   </button>
@@ -383,7 +386,7 @@ export default function Editor() {
                     className="icon-btn icon-btn-sm"
                     onClick={() => deleteTier(tier.id)}
                     disabled={data.tiers.length <= 1}
-                    aria-label="Delete tier"
+                    aria-label={t('editor.deleteTier')}
                   >
                     <Trash size={16} />
                   </button>
@@ -393,15 +396,15 @@ export default function Editor() {
           </div>
           <button type="button" className="btn btn-ghost btn-sm add-tier" onClick={addTier} disabled={data.tiers.length >= 20}>
             <Plus size={16} weight="bold" aria-hidden="true" />
-            Add tier
+            {t('editor.addTier')}
           </button>
 
           <div className={`pool ${dropTarget === POOL ? 'drop-active' : ''}`}>
             <h4>
-              Unranked <span className="count">{data.pool.length}</span>
+              {t('editor.unranked')} <span className="count">{data.pool.length}</span>
             </h4>
             <div className={`tier-items pool-items ${selectedId ? 'tier-items-target' : ''}`} {...dropZoneProps(POOL)}>
-              {data.pool.length === 0 && <p className="muted small">Search for games to add them here, then drag them into tiers.</p>}
+              {data.pool.length === 0 && <p className="muted small">{t('editor.poolEmpty')}</p>}
               {data.pool.map((item) => renderTile(item, POOL))}
             </div>
           </div>

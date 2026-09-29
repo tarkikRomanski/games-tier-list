@@ -14,6 +14,10 @@
         const t = localStorage.getItem('theme');
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
       } catch {}
+      try {
+        const l = localStorage.getItem('lang');
+        if (l === 'en' || l === 'uk') document.documentElement.lang = l;
+      } catch {}
     </script>
   </head>
   <body>

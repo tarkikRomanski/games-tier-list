@@ -1,8 +1,10 @@
 import GameTile from './GameTile.jsx';
 import { inkFor, tierLabelSize } from '../util.js';
+import { useI18n } from '../i18n/index.jsx';
 
 /** Read-only rendering of a tier list. */
 export default function TierBoard({ data }) {
+  const { t } = useI18n();
   return (
     <div className="board">
       {data.tiers.map((tier) => (
@@ -19,7 +21,7 @@ export default function TierBoard({ data }) {
       ))}
       {data.pool.length > 0 && (
         <div className="pool">
-          <h4>Not ranked yet</h4>
+          <h4>{t('board.notRanked')}</h4>
           <div className="tier-items">
             {data.pool.map((item) => (
               <GameTile key={item.id} item={item} />

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Check, MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import { newId } from '../util.js';
+import { useI18n } from '../i18n/index.jsx';
 
 /** Search the game catalogue and add results (or a custom entry) to the list. */
 export default function GameSearch({ onAdd, isAdded }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [results, setResults] = useState([]);
@@ -47,19 +49,19 @@ export default function GameSearch({ onAdd, isAdded }) {
 
   return (
     <aside className="search-panel">
-      <h3>Add games</h3>
+      <h3>{t('search.title')}</h3>
       <label className="search-field">
         <MagnifyingGlass size={18} aria-hidden="true" />
         <input
           className="input"
           type="search"
-          placeholder="Search games…"
+          placeholder={t('search.placeholder')}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
             setPage(1);
           }}
-          aria-label="Search games"
+          aria-label={t('search.label')}
         />
       </label>
       {error && <p className="error small">{error}</p>}
@@ -73,7 +75,7 @@ export default function GameSearch({ onAdd, isAdded }) {
               className="search-result"
               disabled={added}
               onClick={() => onAdd({ id: g.id, name: g.name, image: g.image })}
-              title={added ? 'Already in your list' : `Add ${g.name}`}
+              title={added ? t('search.alreadyAdded') : t('search.add', { name: g.name })}
             >
               {g.image ? <img src={g.image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <div className="tile-placeholder" />}
               <span className="search-result-text">
@@ -88,7 +90,7 @@ export default function GameSearch({ onAdd, isAdded }) {
             </button>
           );
         })}
-        {!loading && !error && results.length === 0 && <p className="muted small">No games found.</p>}
+        {!loading && !error && results.length === 0 && <p className="muted small">{t('search.noResults')}</p>}
         {loading &&
           Array.from({ length: results.length ? 2 : 6 }, (_, i) => (
             <div className="search-result search-result-skeleton" key={`s${i}`} aria-hidden="true">
@@ -98,28 +100,31 @@ export default function GameSearch({ onAdd, isAdded }) {
           ))}
         {hasMore && !loading && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPage((p) => p + 1)}>
-            Load more
+            {t('common.loadMore')}
           </button>
         )}
       </div>
       <form className="custom-game" onSubmit={addCustom}>
         <input
           className="input"
-          placeholder="Can't find it? Add by name"
+          placeholder={t('search.customPlaceholder')}
           value={customName}
           maxLength={120}
           onChange={(e) => setCustomName(e.target.value)}
         />
         <button className="btn btn-sm" type="submit" disabled={!customName.trim()}>
-          Add
+          {t('search.customAdd')}
         </button>
       </form>
       {source && (
         <p className="muted tiny">
-          Game data from{' '}
-          <a href={source.url} target="_blank" rel="noreferrer">
-            {source.label}
-          </a>
+          {t('search.source', {
+            source: (
+              <a href={source.url} target="_blank" rel="noreferrer">
+                {source.label}
+              </a>
+            ),
+          })}
         </p>
       )}
     </aside>

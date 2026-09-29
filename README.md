@@ -13,6 +13,9 @@ Rank video games in S‑to‑D tier lists and share them with the community.
 - **Community** – feed of public lists (recent / most liked, searchable by title or game), likes, comments,
   user profiles, and **Remix** to copy someone else's list into your account and make it your own.
 
+- **Languages** – the interface is available in English and Ukrainian. It follows the browser language on the first
+  visit; the switcher in the header changes it and remembers the choice.
+
 ## Game data (free APIs)
 
 | Provider | Key needed | Catalogue |
@@ -129,3 +132,15 @@ client/src/
   components/   TierBoard, GameSearch, GameTile, ListCard
 test/           API and provider tests (node:test)
 ```
+
+## Translations
+
+Interface text lives in `client/src/i18n/`: `en.js` is the reference dictionary and `uk.js` the Ukrainian one (missing
+keys fall back to English). Components read text with `const { t } = useI18n()` and `t('key', { name })`; an entry
+can be an object of plural forms (`one`, `few`, `many`, `other`) picked by `count`. The API still answers in
+English, and `client/src/i18n/errors.js` maps its messages to dictionary keys, so add an entry there when you add a
+new server error. The Privacy Policy and Terms keep a full copy per language in their page components.
+
+To add a language, create `client/src/i18n/<code>.js`, register it in `DICTIONARIES` and `LANGUAGES` in
+`client/src/i18n/index.jsx`, add the code to the check in `client/index.html`, and add a content entry to the
+legal pages.

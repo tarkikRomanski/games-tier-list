@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import { ChatCircle, GameController, Heart } from '@phosphor-icons/react';
-import { DEFAULT_TIERS, VISIBILITY_LABELS, displayNameOf, timeAgo } from '../util.js';
+import { DEFAULT_TIERS, displayNameOf, timeAgo } from '../util.js';
+import { useI18n } from '../i18n/index.jsx';
 
 export default function ListCard({ list, showVisibility = false, index = 0 }) {
+  const { t } = useI18n();
   return (
     <Link to={`/lists/${list.id}`} className="card" style={{ '--i': Math.min(index, 12) }}>
       <div className="card-cover">
@@ -21,26 +23,26 @@ export default function ListCard({ list, showVisibility = false, index = 0 }) {
       <div className="card-body">
         <h3>{list.title}</h3>
         <p className="card-meta">
-          <span>by {displayNameOf(list.author)}</span>
+          <span>{t('card.by', { name: displayNameOf(list.author) })}</span>
           <span>{timeAgo(list.updatedAt)}</span>
         </p>
         <div className="card-stats">
-          <span title="Games">
+          <span title={t('card.games')}>
             <GameController size={16} aria-hidden="true" />
             {list.itemCount}
-            <span className="sr-only"> games</span>
+            <span className="sr-only"> {t('card.gamesUnit', { count: list.itemCount })}</span>
           </span>
-          <span title="Likes">
+          <span title={t('card.likes')}>
             <Heart size={16} aria-hidden="true" />
             {list.likeCount}
-            <span className="sr-only"> likes</span>
+            <span className="sr-only"> {t('card.likesUnit', { count: list.likeCount })}</span>
           </span>
-          <span title="Comments">
+          <span title={t('card.comments')}>
             <ChatCircle size={16} aria-hidden="true" />
             {list.commentCount}
-            <span className="sr-only"> comments</span>
+            <span className="sr-only"> {t('card.commentsUnit', { count: list.commentCount })}</span>
           </span>
-          {showVisibility && <span className={`badge badge-${list.visibility}`}>{VISIBILITY_LABELS[list.visibility]}</span>}
+          {showVisibility && <span className={`badge badge-${list.visibility}`}>{t(`visibility.${list.visibility}`)}</span>}
         </div>
       </div>
     </Link>

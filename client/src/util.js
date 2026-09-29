@@ -1,3 +1,5 @@
+import { getLanguage, t } from './i18n/index.jsx';
+
 export const DEFAULT_TIERS = [
   { label: 'S', color: '#ff7f7f' },
   { label: 'A', color: '#ffbf7f' },
@@ -18,9 +20,9 @@ export const emptyTierData = () => ({
 /** The name to show for a user: their chosen name, falling back to the nickname. */
 export const displayNameOf = (user) => user.displayName || user.username;
 
+/** How long ago a date was, in the active language: "5 minutes ago", "5 хвилин тому". */
 export function timeAgo(isoDate) {
   const s = Math.max(0, (Date.now() - new Date(isoDate).getTime()) / 1000);
-  if (s < 60) return 'just now';
   const units = [
     ['year', 31536000],
     ['month', 2592000],
@@ -30,16 +32,17 @@ export function timeAgo(isoDate) {
   ];
   for (const [name, secs] of units) {
     const n = Math.floor(s / secs);
-    if (n >= 1) return `${n} ${name}${n > 1 ? 's' : ''} ago`;
+    if (n >= 1) return new Intl.RelativeTimeFormat(getLanguage(), { numeric: 'always' }).format(-n, name);
   }
-  return 'just now';
+  return t('time.justNow');
 }
 
-export const VISIBILITY_LABELS = {
-  private: 'Private',
-  unlisted: 'Unlisted',
-  public: 'Public',
-};
+/** A localised date, long by default: "29 September 2026", "29 вересня 2026 р.". Empty for an unparseable value. */
+export function formatDate(value, options = { dateStyle: 'long' }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(getLanguage(), options);
+}
 
 /** Size modifier class for a tier label, so longer names shrink to fit the label box. */
 export function tierLabelSize(label = '') {

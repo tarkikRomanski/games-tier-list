@@ -4,9 +4,14 @@ import { CheckCircle, Clock, ImageSquare, Trash } from '@phosphor-icons/react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Avatar } from '../components/ui.jsx';
+import { useI18n } from '../i18n/index.jsx';
+import { formatDate } from '../util.js';
 
 const AVATAR_PX = 256;
 const AVATAR_MAX_BYTES = 200 * 1024; // matches the server limit
+
+/** Thrown when even the lowest quality setting is over the size limit. */
+class ImageTooDetailedError extends Error {}
 
 /** Crops the picture to a centred square and shrinks it, so uploads stay small whatever the camera made. */
 async function resizeImage(file) {
@@ -24,13 +29,12 @@ async function resizeImage(file) {
     if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/jpeg', quality);
     if ((url.length - url.indexOf(',') - 1) * 0.75 <= AVATAR_MAX_BYTES) return url;
   }
-  throw new Error('That picture is too detailed to use, try another one');
+  throw new ImageTooDetailedError();
 }
-
-const formatDate = (iso) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'long' });
 
 export default function EditProfile() {
   const { updateUser } = useAuth();
+  const { t } = useI18n();
   const fileInput = useRef(null);
   const [profile, setProfile] = useState(null);
   const [displayName, setDisplayName] = useState('');
@@ -74,11 +78,11 @@ export default function EditProfile() {
     if (!file) return;
     setError('');
     setSaved(false);
-    if (!file.type.startsWith('image/')) return setError('Choose an image file');
+    if (!file.type.startsWith('image/')) return setError(t('profile.chooseImage'));
     try {
       setAvatar(await resizeImage(file));
     } catch (err) {
-      setError(err.message.startsWith('That picture') ? err.message : "Couldn't read that image, try another one");
+      setError(t(err instanceof ImageTooDetailedError ? 'profile.imageTooDetailed' : 'profile.imageUnreadable'));
     }
   };
 
@@ -106,35 +110,35 @@ export default function EditProfile() {
   return (
     <div className="settings-card">
       <div className="page-head">
-        <h1>Edit profile</h1>
+        <h1>{t('profile.editTitle')}</h1>
         <Link to={`/u/${profile.username}`} className="btn btn-ghost btn-sm">
-          View profile
+          {t('profile.view')}
         </Link>
       </div>
       <form onSubmit={submit} className="stack settings-form">
         <div className="avatar-edit">
           <Avatar name={displayName.trim() || username || '?'} src={previewSrc} size="xl" />
           <div className="avatar-edit-actions">
-            <span className="field-label">Profile image</span>
+            <span className="field-label">{t('profile.image')}</span>
             <div className="row">
               <button type="button" className="btn btn-sm" onClick={() => fileInput.current.click()}>
                 <ImageSquare size={16} aria-hidden="true" />
-                {previewSrc ? 'Change image' : 'Upload image'}
+                {t(previewSrc ? 'profile.changeImage' : 'profile.uploadImage')}
               </button>
               {previewSrc && (
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAvatar(null)}>
                   <Trash size={16} aria-hidden="true" />
-                  Remove
+                  {t('profile.removeImage')}
                 </button>
               )}
             </div>
-            <span className="muted tiny">PNG, JPEG or WebP. It's cropped to a square.</span>
+            <span className="muted tiny">{t('profile.imageHint')}</span>
             <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickImage} hidden />
           </div>
         </div>
 
         <label className="field">
-          Name
+          {t('profile.name')}
           <input
             className="input"
             value={displayName}
@@ -143,11 +147,11 @@ export default function EditProfile() {
             placeholder={profile.username}
             autoComplete="name"
           />
-          <span className="muted tiny">Shown on your profile, lists and comments. Leave empty to show your nickname.</span>
+          <span className="muted tiny">{t('profile.nameHint')}</span>
         </label>
 
         <label className="field">
-          Nickname
+          {t('profile.nickname')}
           <span className="input-prefix">
             <span aria-hidden="true">@</span>
             <input
@@ -157,27 +161,24 @@ export default function EditProfile() {
               minLength={3}
               maxLength={24}
               pattern="[A-Za-z0-9_]+"
-              title="3–24 letters, numbers and underscores"
+              title={t('profile.nicknamePattern')}
               autoComplete="username"
               disabled={nicknameLocked}
               required
             />
           </span>
-          <span className="muted tiny">
-            Unique. It's your profile link and the name you log in with. You can change it once every 7 days.
-          </span>
+          <span className="muted tiny">{t('profile.nicknameHint')}</span>
         </label>
         {nicknameLocked && (
           <p className="notice small">
             <Clock size={18} aria-hidden="true" />
-            You changed your nickname recently. You can change it again on {formatDate(profile.usernameChangeAvailableAt)}.
+            {t('profile.nicknameLocked', { date: formatDate(profile.usernameChangeAvailableAt) })}
           </p>
         )}
         {!nicknameLocked && nicknameChanged && (
           <p className="notice small">
             <Clock size={18} aria-hidden="true" />
-            After this change you won't be able to change your nickname again for 7 days. Log in with the new nickname from
-            now on.
+            {t('profile.nicknameWarning')}
           </p>
         )}
 
@@ -189,16 +190,16 @@ export default function EditProfile() {
         {saved && !dirty && (
           <p className="success" role="status">
             <CheckCircle size={18} aria-hidden="true" />
-            Profile saved.
+            {t('profile.saved')}
           </p>
         )}
         <div className="row">
           <button className="btn btn-primary" disabled={busy || !dirty}>
-            {busy ? 'Saving…' : 'Save changes'}
+            {busy ? t('common.saving') : t('profile.save')}
           </button>
           {dirty && (
             <button type="button" className="btn btn-ghost" onClick={() => load(profile)} disabled={busy}>
-              Cancel
+              {t('common.cancel')}
             </button>
           )}
         </div>
