@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   SESSION_COOKIE,
   SESSION_TTL_MS,
+  avatarUrl,
   createSession,
   destroySession,
   hashPassword,
@@ -23,7 +24,15 @@ import {
   stateMatches,
   usernameBase,
 } from './google.js';
-import { LIMITS, ValidationError, cleanText, validateCredentials, validateListInput } from './validate.js';
+import {
+  LIMITS,
+  USERNAME_CHANGE_COOLDOWN_MS,
+  ValidationError,
+  cleanText,
+  validateCredentials,
+  validateListInput,
+  validateProfileInput,
+} from './validate.js';
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -42,8 +51,14 @@ function coverOf(data) {
 }
 const countItems = (data) => data.pool.length + data.tiers.reduce((n, t) => n + t.items.length, 0);
 
+const authorJson = (userId, username, displayName, avatarVersion) => ({
+  username,
+  displayName: displayName || null,
+  avatarUrl: avatarUrl(userId, avatarVersion),
+});
+
 const LIST_SELECT = `
-  SELECT l.*, u.username AS author,
+  SELECT l.*, u.username AS author, u.display_name AS author_name, u.avatar_version AS author_avatar,
     (SELECT COUNT(*) FROM likes WHERE list_id = l.id) AS like_count,
     (SELECT COUNT(*) FROM comments WHERE list_id = l.id) AS comment_count,
     EXISTS (SELECT 1 FROM likes WHERE list_id = l.id AND user_id = :viewer) AS liked
@@ -57,7 +72,7 @@ function listSummary(row) {
     visibility: row.visibility,
     coverImage: row.cover_image,
     itemCount: row.item_count,
-    author: { username: row.author },
+    author: authorJson(row.user_id, row.author, row.author_name, row.author_avatar),
     likeCount: row.like_count,
     commentCount: row.comment_count,
     likedByMe: Boolean(row.liked),
@@ -383,7 +398,7 @@ export function createApp({
   const commentJson = (c, list, viewer) => ({
     id: c.id,
     body: c.body,
-    author: { username: c.username },
+    author: authorJson(c.user_id, c.username, c.display_name, c.avatar_version),
     createdAt: iso(c.created_at),
     canDelete: Boolean(viewer) && (c.user_id === viewer.id || list.user_id === viewer.id),
   });
@@ -391,7 +406,7 @@ export function createApp({
   api.get('/lists/:id/comments', async (req, res) => {
     const list = await loadViewableList(req);
     const rows = await db.all(
-      `SELECT c.*, u.username FROM comments c JOIN users u ON u.id = c.user_id
+      `SELECT c.*, u.username, u.display_name, u.avatar_version FROM comments c JOIN users u ON u.id = c.user_id
        WHERE c.list_id = ? ORDER BY c.created_at ASC, c.id ASC LIMIT 500`,
       [list.id],
     );
@@ -406,9 +421,11 @@ export function createApp({
       req.user.id,
       body,
     ]);
-    const c = await db.get('SELECT c.*, u.username FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?', [
-      lastInsertRowid,
-    ]);
+    const c = await db.get(
+      `SELECT c.*, u.username, u.display_name, u.avatar_version FROM comments c
+       JOIN users u ON u.id = c.user_id WHERE c.id = ?`,
+      [lastInsertRowid],
+    );
     res.status(201).json({ comment: commentJson(c, list, req.user) });
   });
 
@@ -424,7 +441,7 @@ export function createApp({
 
   // ---------- Profiles ----------
   api.get('/users/:username', async (req, res) => {
-    const user = await db.get('SELECT id, username, created_at FROM users WHERE username = ?', [
+    const user = await db.get('SELECT id, username, display_name, avatar_version, created_at FROM users WHERE username = ?', [
       String(req.params.username),
     ]);
     if (!user) throw new HttpError(404, 'User not found');
@@ -432,7 +449,81 @@ export function createApp({
       `${LIST_SELECT} WHERE l.user_id = :owner AND l.visibility = 'public' ORDER BY l.updated_at DESC`,
       { viewer: req.user?.id ?? 0, owner: user.id },
     );
-    res.json({ user: { username: user.username, joinedAt: iso(user.created_at) }, lists: rows.map(listSummary) });
+    res.json({
+      user: { ...authorJson(user.id, user.username, user.display_name, user.avatar_version), joinedAt: iso(user.created_at) },
+      lists: rows.map(listSummary),
+    });
+  });
+
+  api.get('/users/:id/avatar', async (req, res) => {
+    const row = await db.get('SELECT avatar FROM users WHERE id = ?', [Number(req.params.id) || 0]);
+    const m = /^data:(image\/[a-z]+);base64,(.+)$/.exec(row?.avatar ?? '');
+    if (!m) throw new HttpError(404, 'No profile image');
+    // The URL carries the image version, so a new upload gets a new URL and this one never changes.
+    res.set({ 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+    res.type(m[1]).send(Buffer.from(m[2], 'base64'));
+  });
+
+  // ---------- Own profile settings ----------
+  const PROFILE_SELECT = 'SELECT id, username, display_name, avatar_version, username_changed_at FROM users WHERE id = ?';
+  const nextUsernameChange = (changedAt) =>
+    changedAt && changedAt + USERNAME_CHANGE_COOLDOWN_MS > Date.now() ? changedAt + USERNAME_CHANGE_COOLDOWN_MS : null;
+  const profileJson = (row) => {
+    const next = nextUsernameChange(row.username_changed_at);
+    return {
+      ...authorJson(row.id, row.username, row.display_name, row.avatar_version),
+      usernameChangeAvailableAt: next ? new Date(next).toISOString() : null,
+    };
+  };
+
+  api.get('/profile', requireUser, async (req, res) => {
+    res.json({ profile: profileJson(await db.get(PROFILE_SELECT, [req.user.id])) });
+  });
+
+  api.put('/profile', requireUser, async (req, res) => {
+    const input = validateProfileInput(req.body);
+    const row = await db.get(PROFILE_SELECT, [req.user.id]);
+    const sets = [];
+    const args = [];
+    let guard = '';
+    const guardArgs = [];
+
+    // The nickname is the login name and profile URL, so it is unique and may change only once every 7 days.
+    if (input.username !== undefined && input.username !== row.username) {
+      const next = nextUsernameChange(row.username_changed_at);
+      if (next) {
+        throw new HttpError(429, `You can change your nickname again on ${new Date(next).toUTCString().slice(0, 16)}`);
+      }
+      if (await db.get('SELECT 1 FROM users WHERE username = ? AND id != ?', [input.username, row.id])) {
+        throw new HttpError(409, 'That nickname is taken');
+      }
+      const now = Date.now();
+      sets.push('username = ?', 'username_changed_at = ?');
+      args.push(input.username, now);
+      // Re-checked in the UPDATE so two concurrent requests can't both spend the same change.
+      guard = ' AND (username_changed_at IS NULL OR username_changed_at <= ?)';
+      guardArgs.push(now - USERNAME_CHANGE_COOLDOWN_MS);
+    }
+    if (input.displayName !== undefined) {
+      sets.push('display_name = ?');
+      args.push(input.displayName || null);
+    }
+    if (input.avatar !== undefined) {
+      sets.push('avatar = ?', 'avatar_version = ?');
+      args.push(input.avatar, input.avatar ? Date.now() : null);
+    }
+
+    if (sets.length) {
+      let result;
+      try {
+        result = await db.run(`UPDATE users SET ${sets.join(', ')} WHERE id = ?${guard}`, [...args, row.id, ...guardArgs]);
+      } catch (err) {
+        if (/UNIQUE/i.test(err.message)) throw new HttpError(409, 'That nickname is taken');
+        throw err;
+      }
+      if (result.changes === 0) throw new HttpError(429, 'You changed your nickname recently, try again later');
+    }
+    res.json({ profile: profileJson(await db.get(PROFILE_SELECT, [row.id])) });
   });
 
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));

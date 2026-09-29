@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Moon, Plus, SignOut, Sun } from '@phosphor-icons/react';
+import { GearSix, Moon, Plus, SignOut, Sun } from '@phosphor-icons/react';
 import { useAuth } from './auth.jsx';
 import { Avatar, BrandMark, NotFound, SkeletonGrid } from './components/ui.jsx';
 import Feed from './pages/Feed.jsx';
@@ -9,8 +9,10 @@ import MyLists from './pages/MyLists.jsx';
 import Editor from './pages/Editor.jsx';
 import ListView from './pages/ListView.jsx';
 import Profile from './pages/Profile.jsx';
+import EditProfile from './pages/EditProfile.jsx';
 import Privacy from './pages/Privacy.jsx';
 import Terms from './pages/Terms.jsx';
+import { displayNameOf } from './util.js';
 
 /** Start each new page at the top, unless the link points at a section on it. */
 function ScrollToTop() {
@@ -80,8 +82,11 @@ function Header() {
                 <span className="hide-sm">New list</span>
               </Link>
               <Link to={`/u/${user.username}`} className="user-chip" title="Your profile">
-                <Avatar name={user.username} size="sm" />
-                <span className="hide-sm">{user.username}</span>
+                <Avatar name={displayNameOf(user)} src={user.avatarUrl} size="sm" />
+                <span className="hide-sm">{displayNameOf(user)}</span>
+              </Link>
+              <Link to="/settings/profile" className="icon-btn" aria-label="Edit profile" title="Edit profile">
+                <GearSix size={20} />
               </Link>
               <button type="button" className="icon-btn" onClick={logout} aria-label="Log out" title="Log out">
                 <SignOut size={20} />
@@ -118,6 +123,7 @@ export default function App() {
           <Route path="/lists/:id" element={<ListView />} />
           <Route path="/lists/:id/edit" element={<RequireAuth><Editor /></RequireAuth>} />
           <Route path="/u/:username" element={<Profile />} />
+          <Route path="/settings/profile" element={<RequireAuth><EditProfile /></RequireAuth>} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="*" element={<NotFound />} />

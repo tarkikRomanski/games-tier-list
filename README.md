@@ -7,6 +7,9 @@ Rank video games in S‑to‑D tier lists and share them with the community.
 - **Tier list editor** – search a catalogue of games, drag them into tiers (or tap a game then tap a tier on touch
   screens), rename/recolour/reorder/add/remove tiers, add games that aren't in the catalogue by name.
 - **Sharing** – each list is *Private*, *Unlisted* (anyone with the link) or *Public* (shown in the community feed).
+- **Profiles** – edit your profile at `/settings/profile`: upload a profile image (cropped and shrunk to 256px in
+  the browser, stored in the database), set a display name, and change your nickname (the unique username used to log
+  in and in `/u/<nickname>` links) once every 7 days.
 - **Community** – feed of public lists (recent / most liked, searchable by title or game), likes, comments,
   user profiles, and **Remix** to copy someone else's list into your account and make it your own.
 

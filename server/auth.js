@@ -42,7 +42,7 @@ export async function destroySession(db, token) {
 export async function userForToken(db, token) {
   if (!token) return null;
   const row = await db.get(
-    `SELECT u.id, u.username, s.expires_at FROM sessions s
+    `SELECT u.id, u.username, u.display_name, u.avatar_version, s.expires_at FROM sessions s
      JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`,
     [hashToken(token)],
   );
@@ -51,8 +51,16 @@ export async function userForToken(db, token) {
     await destroySession(db, token);
     return null;
   }
-  return { id: row.id, username: row.username };
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name || null,
+    avatarUrl: avatarUrl(row.id, row.avatar_version),
+  };
 }
+
+/** Public URL of a user's profile image, versioned so it can be cached forever. */
+export const avatarUrl = (userId, version) => (version ? `/api/users/${userId}/avatar?v=${version}` : null);
 
 export function parseCookies(header = '') {
   const out = {};

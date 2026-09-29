@@ -27,10 +27,12 @@ export function AuthProvider({ children }) {
     await api.post('/auth/logout');
     setUser(null);
   }, []);
+  /** Keeps the header in sync after the profile is edited. */
+  const updateUser = useCallback((fields) => setUser((u) => (u ? { ...u, ...fields } : u)), []);
 
   const value = useMemo(
-    () => ({ user, loading: user === undefined, providers, login, register, logout }),
-    [user, providers, login, register, logout],
+    () => ({ user, loading: user === undefined, providers, login, register, logout, updateUser }),
+    [user, providers, login, register, logout, updateUser],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -22,6 +22,10 @@ const SECTIONS = [
             email address, profile photo or anything else from your Google account.
           </li>
           <li>
+            <strong>Profile details you choose to add:</strong> a display name and a profile image. We keep the image you
+            upload, shrunk to a small square, and the date you last changed your username.
+          </li>
+          <li>
             <strong>Join date</strong>, shown on your profile.
           </li>
         </ul>
@@ -74,7 +78,7 @@ const SECTIONS = [
     title: 'What other people can see',
     body: (
       <ul>
-        <li>Your username, profile page, join date and public tier lists are visible to everyone.</li>
+        <li>Your username, display name, profile image, join date and public tier lists are visible to everyone.</li>
         <li>Unlisted lists are visible to anyone who has the link.</li>
         <li>Private lists are visible only to you.</li>
         <li>Comments are visible to everyone who can see the list they&apos;re on. Like counts are public.</li>

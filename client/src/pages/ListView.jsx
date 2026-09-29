@@ -5,7 +5,7 @@ import { useAuth } from '../auth.jsx';
 import { ChatCircle, GitFork, Heart, Lock, PencilSimple, ShareNetwork, Trash, WarningCircle } from '@phosphor-icons/react';
 import TierBoard from '../components/TierBoard.jsx';
 import { Avatar, EmptyState, SkeletonBoard } from '../components/ui.jsx';
-import { VISIBILITY_LABELS, timeAgo } from '../util.js';
+import { VISIBILITY_LABELS, displayNameOf, timeAgo } from '../util.js';
 
 function Comments({ listId, user }) {
   const [comments, setComments] = useState([]);
@@ -51,11 +51,11 @@ function Comments({ listId, user }) {
       </h2>
       {comments.map((c) => (
         <div className="comment" key={c.id}>
-          <Avatar name={c.author.username} size="sm" />
+          <Avatar name={displayNameOf(c.author)} src={c.author.avatarUrl} size="sm" />
           <div className="comment-main">
             <div className="comment-head small">
               <Link to={`/u/${c.author.username}`}>
-                <strong>{c.author.username}</strong>
+                <strong>{displayNameOf(c.author)}</strong>
               </Link>
               <span className="muted">{timeAgo(c.createdAt)}</span>
               {c.canDelete && (
@@ -184,8 +184,8 @@ export default function ListView() {
           <h1>{list.title}</h1>
           <p className="list-meta">
             <Link to={`/u/${list.author.username}`} className="author">
-              <Avatar name={list.author.username} size="sm" />
-              {list.author.username}
+              <Avatar name={displayNameOf(list.author)} src={list.author.avatarUrl} size="sm" />
+              {displayNameOf(list.author)}
             </Link>
             <span className="muted">updated {timeAgo(list.updatedAt)}</span>
             <span className="muted">{list.itemCount} games</span>

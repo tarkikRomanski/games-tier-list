@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ChatCircle, GameController, Heart } from '@phosphor-icons/react';
-import { DEFAULT_TIERS, VISIBILITY_LABELS, timeAgo } from '../util.js';
+import { DEFAULT_TIERS, VISIBILITY_LABELS, displayNameOf, timeAgo } from '../util.js';
 
 export default function ListCard({ list, showVisibility = false, index = 0 }) {
   return (
@@ -21,7 +21,7 @@ export default function ListCard({ list, showVisibility = false, index = 0 }) {
       <div className="card-body">
         <h3>{list.title}</h3>
         <p className="card-meta">
-          <span>by {list.author.username}</span>
+          <span>by {displayNameOf(list.author)}</span>
           <span>{timeAgo(list.updatedAt)}</span>
         </p>
         <div className="card-stats">
