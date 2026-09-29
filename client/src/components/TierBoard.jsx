@@ -1,5 +1,5 @@
 import GameTile from './GameTile.jsx';
-import { inkFor } from '../util.js';
+import { inkFor, tierLabelSize } from '../util.js';
 
 /** Read-only rendering of a tier list. */
 export default function TierBoard({ data }) {
@@ -7,7 +7,7 @@ export default function TierBoard({ data }) {
     <div className="board">
       {data.tiers.map((tier) => (
         <div className="tier-row" key={tier.id}>
-          <div className="tier-label" style={{ background: tier.color, color: inkFor(tier.color) }}>
+          <div className={`tier-label ${tierLabelSize(tier.label)}`} title={tier.label} style={{ background: tier.color, color: inkFor(tier.color) }}>
             <span>{tier.label}</span>
           </div>
           <div className="tier-items">
