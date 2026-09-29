@@ -5,12 +5,14 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined); // undefined = still loading
+  const [providers, setProviders] = useState({ google: false });
 
   useEffect(() => {
     api.get('/auth/me').then(
       (r) => setUser(r.user),
       () => setUser(null),
     );
+    api.get('/auth/providers').then(setProviders, () => {});
   }, []);
 
   const login = useCallback(async (username, password) => {
@@ -26,7 +28,10 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, loading: user === undefined, login, register, logout }), [user, login, register, logout]);
+  const value = useMemo(
+    () => ({ user, loading: user === undefined, providers, login, register, logout }),
+    [user, providers, login, register, logout],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

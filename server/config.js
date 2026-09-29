@@ -22,9 +22,14 @@ export function appFromEnv({ root, staticDir = null } = {}) {
   });
 
   const games = createGamesProvider(env);
+  const google =
+    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, publicUrl: env.PUBLIC_URL || null }
+      : null;
   const app = createApp({
     db: dbPromise,
     games,
+    google,
     secureCookies: env.SECURE_COOKIES ? env.SECURE_COOKIES === 'true' : isProd,
     // On Vercel the platform's proxy sets the client IP header, so trust it for rate limiting.
     trustProxy: env.VERCEL ? true : 'loopback',

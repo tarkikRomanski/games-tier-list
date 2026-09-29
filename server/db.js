@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_hash TEXT NOT NULL,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  google_sub    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -84,5 +85,13 @@ export async function openDb(url = ':memory:', authToken) {
     await client.execute('PRAGMA foreign_keys = ON');
   }
   await client.executeMultiple(SCHEMA);
+  await migrate(db);
   return db;
+}
+
+/** Upgrades databases created before a column existed. Each step is idempotent. */
+async function migrate(db) {
+  const userColumns = (await db.all('PRAGMA table_info(users)')).map((c) => c.name);
+  if (!userColumns.includes('google_sub')) await db.run('ALTER TABLE users ADD COLUMN google_sub TEXT');
+  await db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub)');
 }
