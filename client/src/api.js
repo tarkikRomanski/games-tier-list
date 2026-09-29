@@ -1,3 +1,6 @@
+import { t } from './i18n/index.jsx';
+import { translateServerError } from './i18n/errors.js';
+
 export class ApiError extends Error {
   constructor(status, message) {
     super(message);
@@ -13,7 +16,7 @@ async function request(method, path, body) {
   }
   const res = await fetch(`/api${path}`, init);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error || `Request failed (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, data.error ? translateServerError(data.error) : t('err.requestFailed', { status: res.status }));
   return data;
 }
 

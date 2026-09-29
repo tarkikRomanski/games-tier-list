@@ -4,8 +4,10 @@ import { Plus, Stack } from '@phosphor-icons/react';
 import { api } from '../api.js';
 import ListCard from '../components/ListCard.jsx';
 import { EmptyState, SkeletonGrid } from '../components/ui.jsx';
+import { useI18n } from '../i18n/index.jsx';
 
 export default function MyLists() {
+  const { t } = useI18n();
   const [lists, setLists] = useState(null);
   const [error, setError] = useState('');
 
@@ -19,10 +21,10 @@ export default function MyLists() {
   return (
     <>
       <div className="page-head">
-        <h1>My tier lists</h1>
+        <h1>{t('my.title')}</h1>
         <Link to="/new" className="btn btn-accent">
           <Plus size={18} weight="bold" aria-hidden="true" />
-          New tier list
+          {t('my.new')}
         </Link>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
@@ -30,10 +32,10 @@ export default function MyLists() {
       {lists?.length === 0 && (
         <EmptyState
           icon={Stack}
-          title="You haven't made any tier lists yet."
+          title={t('my.empty')}
           action={
             <Link to="/new" className="btn btn-accent">
-              Create your first one
+              {t('my.createFirst')}
             </Link>
           }
         />

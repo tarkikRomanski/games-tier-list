@@ -5,8 +5,8 @@ export const LEGAL = {
   operator: '[Operator name]',
   /** Address for privacy requests, account deletion and legal notices. */
   contactEmail: '[contact@example.com]',
-  /** Country or state whose law governs the Terms. */
+  /** Country or state whose law governs the Terms. Both the English and Ukrainian Terms show it as written. */
   jurisdiction: '[Country or state]',
-  /** Date these versions of the documents take effect. Update it whenever either page changes. */
-  effectiveDate: '29 September 2026',
+  /** Date (YYYY-MM-DD) these versions of the documents take effect. Update it whenever either page changes. */
+  effectiveDate: '2026-09-29',
 };

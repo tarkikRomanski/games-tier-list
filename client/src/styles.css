@@ -9,8 +9,8 @@
  */
 
 :root {
-  --font-display: 'Russo One', 'Chakra Petch', system-ui, sans-serif;
-  --font-body: 'Chakra Petch', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Russo One', 'Chakra Petch', 'Exo 2', system-ui, sans-serif;
+  --font-body: 'Chakra Petch', 'Exo 2', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --r-tile: 6px;
   --r-control: 8px;
@@ -525,6 +525,34 @@ img.avatar {
 }
 .icon-btn-danger:hover:not(:disabled) {
   color: var(--color-destructive-text);
+}
+
+/* Language picker: the invisible native select covers the button, so it keeps the platform's menu and keyboard use. */
+.lang-switch {
+  position: relative;
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.lang-switch:hover {
+  color: var(--color-foreground);
+  background: var(--color-muted);
+}
+.lang-switch:has(.lang-select:focus-visible) {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+.lang-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
 }
 
 .input {
@@ -1704,9 +1732,13 @@ textarea.input {
 /* ---------- responsive ---------- */
 @media (max-width: 960px) {
   .hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
     padding-top: 0.5rem;
+  }
+  /* Longer translations of the call to action wrap instead of widening the page. */
+  .hero-copy .btn {
+    white-space: normal;
   }
   .hero-board {
     transform: none;

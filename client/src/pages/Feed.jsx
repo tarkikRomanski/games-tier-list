@@ -6,6 +6,7 @@ import { useAuth } from '../auth.jsx';
 import ListCard from '../components/ListCard.jsx';
 import { EmptyState, SkeletonGrid } from '../components/ui.jsx';
 import { DEFAULT_TIERS, inkFor } from '../util.js';
+import { useI18n } from '../i18n/index.jsx';
 
 const HERO_SLOTS = [4, 3, 2, 2];
 
@@ -38,6 +39,7 @@ function HeroBoard({ lists }) {
 
 export default function Feed() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [sort, setSort] = useState('recent');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -74,11 +76,11 @@ export default function Feed() {
     <>
       <section className="hero">
         <div className="hero-copy">
-          <h1>Rank every game you&apos;ve ever played.</h1>
-          <p>Build S‑to‑D tier lists from a catalogue of thousands of games, then share them with the community.</p>
+          <h1>{t('feed.heroTitle')}</h1>
+          <p>{t('feed.heroText')}</p>
           <Link to={user ? '/new' : '/register'} className="btn btn-accent btn-lg">
             <Plus size={18} weight="bold" aria-hidden="true" />
-            {user ? 'Create a tier list' : 'Sign up to create a tier list'}
+            {t(user ? 'feed.create' : 'feed.signupToCreate')}
           </Link>
         </div>
         <HeroBoard lists={lists} />
@@ -87,8 +89,8 @@ export default function Feed() {
       <div className="toolbar">
         <div className="tabs" role="tablist">
           {[
-            ['recent', 'Recent'],
-            ['top', 'Most liked'],
+            ['recent', t('feed.recent')],
+            ['top', t('feed.top')],
           ].map(([key, label]) => (
             <button
               key={key}
@@ -109,8 +111,8 @@ export default function Feed() {
           <input
             className="input"
             type="search"
-            placeholder="Search lists or games…"
-            aria-label="Search lists or games"
+            placeholder={t('feed.searchPlaceholder')}
+            aria-label={t('feed.searchPlaceholder')}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -127,15 +129,15 @@ export default function Feed() {
         ))}
       </div>
       {!loading && lists.length === 0 && !error && (
-        <EmptyState icon={Stack} title={query ? 'No tier lists match your search.' : 'No public tier lists yet.'}>
-          Be the first: create one and set it to Public.
+        <EmptyState icon={Stack} title={t(query ? 'feed.noMatch' : 'feed.none')}>
+          {t('feed.beFirst')}
         </EmptyState>
       )}
       {loading && <SkeletonGrid count={lists.length ? 3 : 6} />}
       {hasMore && !loading && (
         <div className="center">
           <button className="btn" onClick={() => setPage((p) => p + 1)}>
-            Load more
+            {t('common.loadMore')}
           </button>
         </div>
       )}
