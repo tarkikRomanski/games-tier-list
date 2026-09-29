@@ -41,6 +41,17 @@ export const VISIBILITY_LABELS = {
   public: 'Public',
 };
 
+/** Size modifier class for a tier label, so longer names shrink to fit the label box. */
+export function tierLabelSize(label = '') {
+  const text = label.trim();
+  const longestWord = Math.max(0, ...text.split(/\s+/).map((w) => w.length));
+  const len = Math.max(text.length / 2, longestWord);
+  if (len <= 3) return '';
+  if (len <= 6) return 'tier-label-md';
+  if (len <= 10) return 'tier-label-sm';
+  return 'tier-label-xs';
+}
+
 /** Dark or light text colour, whichever reads better on the given hex background. */
 export function inkFor(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');

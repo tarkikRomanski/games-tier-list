@@ -1059,19 +1059,38 @@ textarea.input {
   font-size: 1.4rem;
   text-align: center;
   padding: 0.25rem;
-  word-break: break-word;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  min-width: 0;
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.35) inset, 0 -2px 0 rgb(0 0 0 / 0.12) inset;
+}
+.tier-label-md {
+  font-size: 1.1rem;
+}
+.tier-label-sm {
+  font-size: 0.9rem;
+}
+.tier-label-xs {
+  font-size: 0.75rem;
 }
 .tier-label.skeleton {
   box-shadow: none;
 }
 .tier-label-input {
+  display: block;
   width: 100%;
+  min-height: 1.15em;
+  padding: 0;
+  resize: none;
+  overflow: hidden;
   background: transparent;
   border: 0;
   text-align: center;
   color: inherit;
   font: inherit;
+  line-height: inherit;
+  overflow-wrap: anywhere;
   border-radius: 4px;
   cursor: text;
 }
@@ -1708,6 +1727,15 @@ textarea.input {
   .tier-label {
     flex-basis: 64px;
     font-size: 1.1rem;
+  }
+  .tier-label-md {
+    font-size: 0.85rem;
+  }
+  .tier-label-sm {
+    font-size: 0.7rem;
+  }
+  .tier-label-xs {
+    font-size: 0.62rem;
   }
 }
 @media (max-width: 640px) {

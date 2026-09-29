@@ -1,13 +1,41 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { ArrowSquareOut, CaretDown, CaretUp, FloppyDisk, Globe, LinkSimple, Lock, Plus, Trash, X } from '@phosphor-icons/react';
 import GameSearch from '../components/GameSearch.jsx';
 import GameTile from '../components/GameTile.jsx';
 import { SkeletonBoard } from '../components/ui.jsx';
-import { TIER_PALETTE, emptyTierData, inkFor, newId } from '../util.js';
+import { TIER_PALETTE, emptyTierData, inkFor, newId, tierLabelSize } from '../util.js';
 
 const POOL = '__pool__';
+
+/** Multi-line tier name field that wraps and grows with its content. Enter commits instead of adding a line break. */
+function TierLabelInput({ value, onChange }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  });
+  return (
+    <textarea
+      ref={ref}
+      className="tier-label-input"
+      rows={1}
+      value={value}
+      maxLength={40}
+      aria-label="Tier name"
+      onChange={(e) => onChange(e.target.value.replace(/\s*\n\s*/g, ' '))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
 
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Private', hint: 'Only you', Icon: Lock },
@@ -320,14 +348,11 @@ export default function Editor() {
           <div className="board board-editable">
             {data.tiers.map((tier, i) => (
               <div className={`tier-row ${dropTarget === tier.id ? 'drop-active' : ''}`} key={tier.id}>
-                <div className="tier-label" style={{ background: tier.color, color: inkFor(tier.color) }}>
-                  <input
-                    className="tier-label-input"
-                    value={tier.label}
-                    maxLength={40}
-                    aria-label="Tier name"
-                    onChange={(e) => editTier(tier.id, { label: e.target.value })}
-                  />
+                <div
+                  className={`tier-label ${tierLabelSize(tier.label)}`}
+                  style={{ background: tier.color, color: inkFor(tier.color) }}
+                >
+                  <TierLabelInput value={tier.label} onChange={(label) => editTier(tier.id, { label })} />
                 </div>
                 <div className={`tier-items ${selectedId ? 'tier-items-target' : ''}`} {...dropZoneProps(tier.id)}>
                   {tier.items.map((item) => renderTile(item, tier.id))}
