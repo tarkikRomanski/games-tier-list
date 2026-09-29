@@ -15,6 +15,9 @@ export const emptyTierData = () => ({
   pool: [],
 });
 
+/** The name to show for a user: their chosen name, falling back to the nickname. */
+export const displayNameOf = (user) => user.displayName || user.username;
+
 export function timeAgo(isoDate) {
   const s = Math.max(0, (Date.now() - new Date(isoDate).getTime()) / 1000);
   if (s < 60) return 'just now';

@@ -12,9 +12,11 @@ const fakeGames = {
 
 let server;
 let base;
+let db;
 
 before(async () => {
-  const app = createApp({ db: openDb(':memory:'), games: fakeGames });
+  db = await openDb(':memory:');
+  const app = createApp({ db, games: fakeGames });
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;
@@ -175,4 +177,87 @@ test('validates tier list data', async () => {
     assert.equal(r.status, 400, JSON.stringify(body));
     assert.ok(r.body.error);
   }
+});
+
+// Smallest valid PNG (1x1 transparent pixel).
+const PNG_1PX =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+test('edit profile: name and profile image', async () => {
+  const c = client();
+  await c('POST', '/auth/register', { username: 'painter', password: 'password123' });
+  let r = await c('GET', '/profile');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.profile, { username: 'painter', displayName: null, avatarUrl: null, usernameChangeAvailableAt: null });
+
+  r = await c('PUT', '/profile', { displayName: '  Bob   Ross ', avatar: PNG_1PX });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.profile.displayName, 'Bob Ross');
+  assert.match(r.body.profile.avatarUrl, /^\/api\/users\/\d+\/avatar\?v=\d+$/);
+
+  const img = await fetch(`http://127.0.0.1:${server.address().port}${r.body.profile.avatarUrl}`);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await img.arrayBuffer()).subarray(1, 4).toString(), 'PNG');
+
+  // Shown on the public profile, on lists and in the logged-in user.
+  r = await client()('GET', '/users/painter');
+  assert.equal(r.body.user.displayName, 'Bob Ross');
+  assert.ok(r.body.user.avatarUrl);
+  await c('POST', '/lists', { title: 'Mine', visibility: 'public', data: sampleData });
+  r = await c('GET', '/lists/mine');
+  assert.equal(r.body.lists[0].author.displayName, 'Bob Ross');
+  r = await c('GET', '/auth/me');
+  assert.equal(r.body.user.displayName, 'Bob Ross');
+
+  // Clearing both.
+  r = await c('PUT', '/profile', { displayName: '', avatar: null });
+  assert.equal(r.body.profile.displayName, null);
+  assert.equal(r.body.profile.avatarUrl, null);
+
+  for (const avatar of ['https://example.com/a.png', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,aGVsbG8=', 42]) {
+    assert.equal((await c('PUT', '/profile', { avatar })).status, 400, String(avatar));
+  }
+  assert.equal((await c('PUT', '/profile', { displayName: 'x'.repeat(51) })).status, 400);
+  assert.equal((await client()('PUT', '/profile', { displayName: 'anon' })).status, 401);
+});
+
+test('edit profile: nickname is unique and changes once per 7 days', async () => {
+  const c = client();
+  await c('POST', '/auth/register', { username: 'nick_a', password: 'password123' });
+  await client()('POST', '/auth/register', { username: 'nick_taken', password: 'password123' });
+
+  assert.equal((await c('PUT', '/profile', { username: 'NICK_TAKEN' })).status, 409);
+  assert.equal((await c('PUT', '/profile', { username: 'no spaces' })).status, 400);
+  // Saving the current nickname is not a change.
+  assert.equal((await c('PUT', '/profile', { username: 'nick_a' })).body.profile.usernameChangeAvailableAt, null);
+
+  let r = await c('PUT', '/profile', { username: 'nick_b' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.profile.username, 'nick_b');
+  const available = Date.parse(r.body.profile.usernameChangeAvailableAt);
+  assert.ok(Math.abs(available - (Date.now() + 7 * 24 * 3600 * 1000)) < 60_000);
+
+  // The new nickname is the login name and the profile URL.
+  assert.equal((await client()('GET', '/users/nick_a')).status, 404);
+  assert.equal((await client()('GET', '/users/nick_b')).status, 200);
+  assert.equal((await client()('POST', '/auth/login', { username: 'nick_b', password: 'password123' })).status, 200);
+  // The old nickname is free again.
+  assert.equal((await client()('POST', '/auth/register', { username: 'nick_a', password: 'password123' })).status, 201);
+
+  // A second change within 7 days is refused, but other fields can still be edited.
+  r = await c('PUT', '/profile', { username: 'nick_c', displayName: 'Nope' });
+  assert.equal(r.status, 429);
+  r = await c('GET', '/profile');
+  assert.equal(r.body.profile.username, 'nick_b');
+  assert.equal(r.body.profile.displayName, null);
+  assert.equal((await c('PUT', '/profile', { displayName: 'Still fine' })).status, 200);
+
+  // Once 7 days have passed it's allowed again.
+  await db.run('UPDATE users SET username_changed_at = ? WHERE username = ?', [Date.now() - 7 * 24 * 3600 * 1000 - 1000, 'nick_b']);
+  r = await c('GET', '/profile');
+  assert.equal(r.body.profile.usernameChangeAvailableAt, null);
+  r = await c('PUT', '/profile', { username: 'nick_c' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.profile.username, 'nick_c');
 });

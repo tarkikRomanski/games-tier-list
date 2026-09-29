@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 
-/** Initial-letter avatar for a username. */
-export function Avatar({ name, size = 'md' }) {
+/** Profile image, or an initial-letter avatar when the user has none. */
+export function Avatar({ name, src, size = 'md' }) {
+  if (src) return <img className={`avatar avatar-${size}`} src={src} alt="" aria-hidden="true" />;
   return (
     <span className={`avatar avatar-${size}`} aria-hidden="true">
       {name.slice(0, 1).toUpperCase()}

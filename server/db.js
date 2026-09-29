@@ -8,7 +8,11 @@ CREATE TABLE IF NOT EXISTS users (
   username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_hash TEXT NOT NULL,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-  google_sub    TEXT
+  google_sub    TEXT,
+  display_name  TEXT,
+  avatar        TEXT,
+  avatar_version INTEGER,
+  username_changed_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -93,5 +97,11 @@ export async function openDb(url = ':memory:', authToken) {
 async function migrate(db) {
   const userColumns = (await db.all('PRAGMA table_info(users)')).map((c) => c.name);
   if (!userColumns.includes('google_sub')) await db.run('ALTER TABLE users ADD COLUMN google_sub TEXT');
+  if (!userColumns.includes('display_name')) await db.run('ALTER TABLE users ADD COLUMN display_name TEXT');
+  if (!userColumns.includes('avatar')) await db.run('ALTER TABLE users ADD COLUMN avatar TEXT');
+  if (!userColumns.includes('avatar_version')) await db.run('ALTER TABLE users ADD COLUMN avatar_version INTEGER');
+  if (!userColumns.includes('username_changed_at')) {
+    await db.run('ALTER TABLE users ADD COLUMN username_changed_at INTEGER');
+  }
   await db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub)');
 }

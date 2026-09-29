@@ -14,7 +14,11 @@ export const LIMITS = {
   items: 500,
   itemName: 120,
   comment: 1000,
+  displayName: 50,
+  avatarBytes: 200 * 1024,
 };
+
+export const USERNAME_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const VISIBILITIES = ['private', 'unlisted', 'public'];
 
@@ -28,9 +32,14 @@ export function cleanText(value, { field, max, min = 0 }) {
   return text;
 }
 
+export function validateUsername(value, field = 'Username') {
+  const username = cleanText(value, { field, min: 3, max: 24 });
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) fail(`${field} may only contain letters, numbers and underscores`);
+  return username;
+}
+
 export function validateCredentials(body) {
-  const username = cleanText(body?.username, { field: 'Username', min: 3, max: 24 });
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) fail('Username may only contain letters, numbers and underscores');
+  const username = validateUsername(body?.username);
   const password = body?.password;
   if (typeof password !== 'string' || password.length < 8) fail('Password must be at least 8 characters');
   if (password.length > 200) fail('Password is too long');
@@ -107,5 +116,34 @@ export function validateListInput(body, { partial = false } = {}) {
   if (!partial || body?.data !== undefined) {
     out.data = validateTierData(body?.data);
   }
+  return out;
+}
+
+const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+/** A profile image sent as a base64 data URL. Returns the normalised data URL. */
+function validateAvatar(value) {
+  if (typeof value !== 'string') fail('Invalid profile image');
+  const m = /^data:(image\/[a-z]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  if (!m || !AVATAR_TYPES.includes(m[1])) fail('Profile image must be a PNG, JPEG or WebP picture');
+  const bytes = Buffer.from(m[2], 'base64');
+  if (bytes.length > LIMITS.avatarBytes) fail('Profile image is too large');
+  const magic = {
+    'image/png': bytes.subarray(0, 4).toString('hex') === '89504e47',
+    'image/jpeg': bytes.subarray(0, 3).toString('hex') === 'ffd8ff',
+    'image/webp': bytes.subarray(0, 4).toString('latin1') === 'RIFF' && bytes.subarray(8, 12).toString('latin1') === 'WEBP',
+  };
+  if (!magic[m[1]]) fail('Profile image is not a valid picture');
+  return `data:${m[1]};base64,${bytes.toString('base64')}`;
+}
+
+/** Profile edits. Every field is optional; `avatar: null` removes the image. */
+export function validateProfileInput(body) {
+  const out = {};
+  if (body?.username !== undefined) out.username = validateUsername(body.username, 'Nickname');
+  if (body?.displayName !== undefined) {
+    out.displayName = cleanText(body.displayName, { field: 'Name', max: LIMITS.displayName }).replace(/\s+/g, ' ');
+  }
+  if (body?.avatar !== undefined) out.avatar = body.avatar === null ? null : validateAvatar(body.avatar);
   return out;
 }
