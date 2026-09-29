@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { BrandMark } from '../components/ui.jsx';
 
 export default function AuthPage({ mode }) {
   const isLogin = mode === 'login';
@@ -31,6 +32,7 @@ export default function AuthPage({ mode }) {
 
   return (
     <div className="auth-card">
+      <BrandMark />
       <h1>{isLogin ? 'Welcome back' : 'Create your account'}</h1>
       <p className="muted">{isLogin ? 'Log in to build and share tier lists.' : 'Rank your games and share your takes with the community.'}</p>
       <form onSubmit={submit} className="stack">
@@ -61,12 +63,16 @@ export default function AuthPage({ mode }) {
           />
           {!isLogin && <span className="muted tiny">At least 8 characters.</span>}
         </label>
-        {error && <p className="error">{error}</p>}
-        <button className="btn btn-primary" disabled={busy}>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="btn btn-primary btn-lg" disabled={busy}>
           {busy ? 'Please wait…' : isLogin ? 'Log in' : 'Sign up'}
         </button>
       </form>
-      <p className="muted small">
+      <p className="muted small auth-switch">
         {isLogin ? (
           <>No account yet? <Link to="/register" state={location.state}>Sign up</Link></>
         ) : (

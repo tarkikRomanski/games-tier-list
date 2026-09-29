@@ -1,8 +1,40 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { MagnifyingGlass, Plus, Stack } from '@phosphor-icons/react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import ListCard from '../components/ListCard.jsx';
+import { EmptyState, SkeletonGrid } from '../components/ui.jsx';
+import { DEFAULT_TIERS, inkFor } from '../util.js';
+
+const HERO_SLOTS = [4, 3, 2, 2];
+
+/** Hero preview: a small tier board filled with covers from the lists on the page. */
+function HeroBoard({ lists }) {
+  const covers = [...new Set(lists.map((l) => l.coverImage).filter(Boolean))];
+  let next = 0;
+  return (
+    <div className="hero-board" aria-hidden="true">
+      {DEFAULT_TIERS.slice(0, HERO_SLOTS.length).map((tier, r) => (
+        <div className="hero-row" key={tier.label}>
+          <span className="hero-label" style={{ background: tier.color, color: inkFor(tier.color) }}>
+            {tier.label}
+          </span>
+          <div className="hero-slots">
+            {Array.from({ length: HERO_SLOTS[r] }, () => {
+              const i = next++;
+              return (
+                <span className="hero-slot" key={i} style={{ '--i': i }}>
+                  {covers[i] && <img src={covers[i]} alt="" referrerPolicy="no-referrer" />}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Feed() {
   const { user } = useAuth();
@@ -41,13 +73,15 @@ export default function Feed() {
   return (
     <>
       <section className="hero">
-        <h1>Rank every game you&apos;ve ever played.</h1>
-        <p className="muted">
-          Build S‑to‑D tier lists from a catalogue of thousands of games, then share them with the community.
-        </p>
-        <Link to={user ? '/new' : '/register'} className="btn btn-primary">
-          {user ? 'Create a tier list' : 'Sign up to create a tier list'}
-        </Link>
+        <div className="hero-copy">
+          <h1>Rank every game you&apos;ve ever played.</h1>
+          <p>Build S‑to‑D tier lists from a catalogue of thousands of games, then share them with the community.</p>
+          <Link to={user ? '/new' : '/register'} className="btn btn-accent btn-lg">
+            <Plus size={18} weight="bold" aria-hidden="true" />
+            {user ? 'Create a tier list' : 'Sign up to create a tier list'}
+          </Link>
+        </div>
+        <HeroBoard lists={lists} />
       </section>
 
       <div className="toolbar">
@@ -70,31 +104,34 @@ export default function Feed() {
             </button>
           ))}
         </div>
-        <input
-          className="input toolbar-search"
-          type="search"
-          placeholder="Search lists or games…"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-        />
+        <label className="search-field toolbar-search">
+          <MagnifyingGlass size={18} aria-hidden="true" />
+          <input
+            className="input"
+            type="search"
+            placeholder="Search lists or games…"
+            aria-label="Search lists or games"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
       <div className="grid">
-        {lists.map((l) => (
-          <ListCard key={l.id} list={l} />
+        {lists.map((l, i) => (
+          <ListCard key={l.id} list={l} index={i} />
         ))}
       </div>
       {!loading && lists.length === 0 && !error && (
-        <div className="empty">
-          <h3>{query ? 'No tier lists match your search.' : 'No public tier lists yet.'}</h3>
-          <p className="muted">Be the first — create one and set it to Public.</p>
-        </div>
+        <EmptyState icon={Stack} title={query ? 'No tier lists match your search.' : 'No public tier lists yet.'}>
+          Be the first: create one and set it to Public.
+        </EmptyState>
       )}
-      {loading && <p className="muted center">Loading…</p>}
+      {loading && <SkeletonGrid count={lists.length ? 3 : 6} />}
       {hasMore && !loading && (
         <div className="center">
           <button className="btn" onClick={() => setPage((p) => p + 1)}>

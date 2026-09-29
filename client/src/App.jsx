@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Moon, Plus, SignOut, Sun } from '@phosphor-icons/react';
 import { useAuth } from './auth.jsx';
+import { Avatar, BrandMark, NotFound, SkeletonGrid } from './components/ui.jsx';
 import Feed from './pages/Feed.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import MyLists from './pages/MyLists.jsx';
@@ -10,9 +13,36 @@ import Profile from './pages/Profile.jsx';
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <p className="muted center">Loading…</p>;
+  if (loading) return <SkeletonGrid count={3} />;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return children;
+}
+
+/** Light/dark toggle. Follows the system until the user picks a theme. */
+function ThemeToggle() {
+  const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || (systemDark() ? 'dark' : 'light'));
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  const toggle = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    try {
+      localStorage.setItem('theme', next);
+    } catch {
+      /* storage unavailable: the choice lasts for this page view only */
+    }
+  };
+
+  const Icon = theme === 'dark' ? Sun : Moon;
+  return (
+    <button type="button" className="icon-btn" onClick={toggle} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+      <Icon size={20} />
+    </button>
+  );
 }
 
 function Header() {
@@ -20,26 +50,30 @@ function Header() {
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <Link to="/" className="brand">
-          <span className="brand-mark">S</span> Game Tiers
+        <Link to="/" className="brand" aria-label="Game Tiers home">
+          <BrandMark />
+          <span className="brand-name">Game Tiers</span>
         </Link>
-        <nav className="nav">
+        <nav className="nav" aria-label="Main">
           <NavLink to="/" end>
             Community
           </NavLink>
           {user && <NavLink to="/my">My lists</NavLink>}
         </nav>
         <div className="nav-right">
+          <ThemeToggle />
           {user ? (
             <>
-              <Link to="/new" className="btn btn-primary btn-sm">
-                + New list
+              <Link to="/new" className="btn btn-accent btn-sm">
+                <Plus size={16} weight="bold" aria-hidden="true" />
+                <span className="hide-sm">New list</span>
               </Link>
               <Link to={`/u/${user.username}`} className="user-chip" title="Your profile">
-                {user.username}
+                <Avatar name={user.username} size="sm" />
+                <span className="hide-sm">{user.username}</span>
               </Link>
-              <button className="btn btn-ghost btn-sm" onClick={logout}>
-                Log out
+              <button type="button" className="icon-btn" onClick={logout} aria-label="Log out" title="Log out">
+                <SignOut size={20} />
               </button>
             </>
           ) : user === null ? (
@@ -72,7 +106,7 @@ export default function App() {
           <Route path="/lists/:id" element={<ListView />} />
           <Route path="/lists/:id/edit" element={<RequireAuth><Editor /></RequireAuth>} />
           <Route path="/u/:username" element={<Profile />} />
-          <Route path="*" element={<div className="empty"><h2>Page not found</h2><Link to="/">Back to the community</Link></div>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </>
