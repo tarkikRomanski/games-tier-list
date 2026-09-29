@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -12,6 +13,16 @@ import {
   userForToken,
   verifyPassword,
 } from './auth.js';
+import {
+  OAUTH_COOKIE,
+  OAUTH_COOKIE_PATH,
+  OAUTH_TTL_MS,
+  beginGoogleLogin,
+  finishGoogleLogin,
+  readOAuthCookie,
+  stateMatches,
+  usernameBase,
+} from './google.js';
 import { LIMITS, ValidationError, cleanText, validateCredentials, validateListInput } from './validate.js';
 
 class HttpError extends Error {
@@ -55,7 +66,14 @@ function listSummary(row) {
   };
 }
 
-export function createApp({ db: dbOrPromise, games, secureCookies = false, staticDir = null, trustProxy = 'loopback' }) {
+export function createApp({
+  db: dbOrPromise,
+  games,
+  google = null,
+  secureCookies = false,
+  staticDir = null,
+  trustProxy = 'loopback',
+}) {
   // `db` may be a promise so serverless entry points can start handling requests before it is ready.
   let db;
   const dbReady = Promise.resolve(dbOrPromise).then((d) => (db = d));
@@ -139,6 +157,76 @@ export function createApp({ db: dbOrPromise, games, secureCookies = false, stati
   });
 
   api.get('/auth/me', (req, res) => res.json({ user: req.user }));
+
+  // ---------- Sign in with Google ----------
+  api.get('/auth/providers', (_req, res) => res.json({ google: Boolean(google) }));
+
+  // Google must be given the exact redirect URI registered in the Google Cloud console.
+  const googleRedirectUri = (req) => `${google.publicUrl || `${req.protocol}://${req.get('host')}`}/api/auth/google/callback`;
+  const oauthCookieOptions = { httpOnly: true, sameSite: 'lax', secure: secureCookies, path: OAUTH_COOKIE_PATH };
+
+  api.get('/auth/google', (req, res) => {
+    if (!google) throw new HttpError(404, 'Google sign-in is not enabled');
+    if (!authLimiter(`google:${req.ip}`)) throw new HttpError(429, 'Too many attempts, try again later');
+    const { url, cookie } = beginGoogleLogin({ clientId: google.clientId, redirectUri: googleRedirectUri(req), next: req.query.next });
+    res.cookie(OAUTH_COOKIE, cookie, { ...oauthCookieOptions, maxAge: OAUTH_TTL_MS });
+    res.redirect(302, url);
+  });
+
+  api.get('/auth/google/callback', async (req, res) => {
+    if (!google) throw new HttpError(404, 'Google sign-in is not enabled');
+    const pending = readOAuthCookie(parseCookies(req.headers.cookie)[OAUTH_COOKIE]);
+    res.clearCookie(OAUTH_COOKIE, oauthCookieOptions);
+    const fail = (reason) => res.redirect(302, `/login?error=${reason}`);
+
+    if (req.query.error) return fail('google_cancelled');
+    if (!pending || !stateMatches(pending.state, req.query.state) || typeof req.query.code !== 'string') {
+      return fail('google_failed');
+    }
+    let identity;
+    try {
+      identity = await finishGoogleLogin({
+        clientId: google.clientId,
+        clientSecret: google.clientSecret,
+        redirectUri: googleRedirectUri(req),
+        code: req.query.code,
+        verifier: pending.verifier,
+        fetchImpl: google.fetchImpl,
+      });
+    } catch (err) {
+      console.error('Google sign-in failed:', err.message);
+      return fail('google_failed');
+    }
+
+    let row = await db.get('SELECT id FROM users WHERE google_sub = ?', [identity.sub]);
+    if (!row) row = { id: await createGoogleUser(identity) };
+    const { token } = await createSession(db, row.id);
+    setSessionCookie(res, token);
+    res.redirect(302, pending.next);
+  });
+
+  // Google accounts have no password: the hash is a value no scrypt check can ever match.
+  const createGoogleUser = async (identity) => {
+    const base = usernameBase(identity);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const username = attempt === 0 ? base : `${base}_${randomBytes(2).readUInt16BE() % 10000}`;
+      if (await db.get('SELECT 1 FROM users WHERE username = ?', [username])) continue;
+      try {
+        const { lastInsertRowid } = await db.run('INSERT INTO users (username, password_hash, google_sub) VALUES (?, ?, ?)', [
+          username,
+          'google',
+          identity.sub,
+        ]);
+        return lastInsertRowid;
+      } catch (err) {
+        // Lost a race for the same Google account: use the row the other request created.
+        const existing = await db.get('SELECT id FROM users WHERE google_sub = ?', [identity.sub]);
+        if (existing) return existing.id;
+        if (!/UNIQUE/i.test(err.message)) throw err;
+      }
+    }
+    throw new HttpError(500, 'Could not pick a username, please try again');
+  };
 
   // ---------- Games catalogue ----------
   api.get('/games/search', async (req, res) => {

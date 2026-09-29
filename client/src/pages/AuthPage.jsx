@@ -1,16 +1,22 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
-import { BrandMark } from '../components/ui.jsx';
+import { BrandMark, GoogleMark } from '../components/ui.jsx';
+
+const GOOGLE_ERRORS = {
+  google_cancelled: 'Google sign-in was cancelled.',
+  google_failed: "Couldn't sign in with Google. Please try again.",
+};
 
 export default function AuthPage({ mode }) {
   const isLogin = mode === 'login';
-  const { user, login, register } = useAuth();
+  const { user, providers, login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => GOOGLE_ERRORS[searchParams.get('error')] || '');
   const [busy, setBusy] = useState(false);
   const redirectTo = location.state?.from || '/my';
 
@@ -35,6 +41,17 @@ export default function AuthPage({ mode }) {
       <BrandMark />
       <h1>{isLogin ? 'Welcome back' : 'Create your account'}</h1>
       <p className="muted">{isLogin ? 'Log in to build and share tier lists.' : 'Rank your games and share your takes with the community.'}</p>
+      {providers.google && (
+        <>
+          <a className="btn btn-lg btn-google" href={`/api/auth/google?next=${encodeURIComponent(redirectTo)}`}>
+            <GoogleMark />
+            {isLogin ? 'Log in with Google' : 'Sign up with Google'}
+          </a>
+          <p className="divider">
+            <span>or use a username</span>
+          </p>
+        </>
+      )}
       <form onSubmit={submit} className="stack">
         <label className="field">
           Username

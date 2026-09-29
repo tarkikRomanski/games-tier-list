@@ -2,7 +2,8 @@
 
 Rank video games in S‑to‑D tier lists and share them with the community.
 
-- **Accounts** – sign up / log in with a username and password (scrypt-hashed, httpOnly session cookie).
+- **Accounts** – sign up / log in with a username and password (scrypt-hashed, httpOnly session cookie), or with
+  Google when it's configured.
 - **Tier list editor** – search a catalogue of games, drag them into tiers (or tap a game then tap a tier on touch
   screens), rename/recolour/reorder/add/remove tiers, add games that aren't in the catalogue by name.
 - **Sharing** – each list is *Private*, *Unlisted* (anyone with the link) or *Public* (shown in the community feed).
@@ -19,6 +20,23 @@ Rank video games in S‑to‑D tier lists and share them with the community.
 Set `RAWG_API_KEY` to use RAWG (recommended). Without a key the app falls back to FreeToGame so it works out of
 the box. Game searches are proxied through the server, so the key is never exposed to browsers. Each list stores a
 snapshot of the game name and cover image, so saved lists keep working even if the API is down.
+
+## Sign in with Google (optional)
+
+The **Log in with Google** button appears only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set.
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), set up the OAuth consent screen,
+   then create an **OAuth client ID** of type *Web application*.
+2. Add an **Authorized redirect URI** for every place the app runs:
+   - `http://localhost:5173/api/auth/google/callback` for `npm run dev`
+   - `http://localhost:3001/api/auth/google/callback` for `npm start`
+   - `https://<your-domain>/api/auth/google/callback` in production
+3. Put the client ID and secret in `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+The first Google sign-in creates an account with a username taken from the Google profile name (with a number added
+if it's taken). Google accounts have no password, and they are separate from any username/password account.
+The redirect URI is built from the request's host. If that doesn't match the public address (for example behind an
+unusual proxy), set `PUBLIC_URL`, e.g. `https://tiers.example.com`.
 
 ## Running locally
 
@@ -48,6 +66,9 @@ session cookie is only sent over HTTPS.
 | `DATABASE_AUTH_TOKEN` | – | Turso auth token |
 | `DATABASE_PATH` | `./data/tierlist.db` | Local SQLite file, used when `DATABASE_URL` is empty |
 | `SECURE_COOKIES` | `true` in production | Mark the session cookie `Secure` |
+| `GOOGLE_CLIENT_ID` | – | OAuth client ID; enables Sign in with Google (with the secret) |
+| `GOOGLE_CLIENT_SECRET` | – | OAuth client secret |
+| `PUBLIC_URL` | from request | Public origin used to build the Google redirect URI |
 
 ## Deploying to Vercel
 
@@ -66,7 +87,8 @@ Vercel functions have no persistent disk, so the database must be hosted. The ap
 2. **Import the repo** at [vercel.com/new](https://vercel.com/new) → pick `games-tier-list`. The settings come from
    `vercel.json` (build `npm run build`, output `dist`), so leave the defaults.
 3. **Add environment variables** in the import screen (or Project → Settings → Environment Variables):
-   `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `RAWG_API_KEY`.
+   `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `RAWG_API_KEY`, and optionally `GOOGLE_CLIENT_ID` /
+   `GOOGLE_CLIENT_SECRET` (add `https://<your-app>.vercel.app/api/auth/google/callback` as a redirect URI).
 4. **Deploy.** Every push to the connected branch redeploys automatically.
 
 How it runs on Vercel: the built React app in `dist/` is served from Vercel's CDN, and every `/api/*` request is
@@ -87,6 +109,7 @@ api/
 server/
   app.js        Express app: auth, games search, tier lists, likes, comments, profiles
   auth.js       password hashing, sessions, rate limiting
+  google.js     Sign in with Google (OAuth 2.0 authorization code flow with PKCE)
   config.js     builds the app from environment variables
   db.js         schema + libSQL client (local SQLite file or Turso)
   games.js      RAWG / FreeToGame providers
