@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Plus, Stack } from '@phosphor-icons/react';
 import { api } from '../api.js';
 import ListCard from '../components/ListCard.jsx';
+import { EmptyState, SkeletonGrid } from '../components/ui.jsx';
 
 export default function MyLists() {
   const [lists, setLists] = useState(null);
@@ -18,23 +20,27 @@ export default function MyLists() {
     <>
       <div className="page-head">
         <h1>My tier lists</h1>
-        <Link to="/new" className="btn btn-primary">
-          + New tier list
+        <Link to="/new" className="btn btn-accent">
+          <Plus size={18} weight="bold" aria-hidden="true" />
+          New tier list
         </Link>
       </div>
-      {error && <p className="error">{error}</p>}
-      {lists === null && !error && <p className="muted center">Loading…</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {lists === null && !error && <SkeletonGrid count={3} />}
       {lists?.length === 0 && (
-        <div className="empty">
-          <h3>You haven&apos;t made any tier lists yet.</h3>
-          <Link to="/new" className="btn btn-primary">
-            Create your first one
-          </Link>
-        </div>
+        <EmptyState
+          icon={Stack}
+          title="You haven't made any tier lists yet."
+          action={
+            <Link to="/new" className="btn btn-accent">
+              Create your first one
+            </Link>
+          }
+        />
       )}
       <div className="grid">
-        {lists?.map((l) => (
-          <ListCard key={l.id} list={l} showVisibility />
+        {lists?.map((l, i) => (
+          <ListCard key={l.id} list={l} index={i} showVisibility />
         ))}
       </div>
     </>

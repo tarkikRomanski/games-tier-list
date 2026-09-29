@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { Check, MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import { newId } from '../util.js';
 
 /** Search the game catalogue and add results (or a custom entry) to the list. */
@@ -47,19 +48,22 @@ export default function GameSearch({ onAdd, isAdded }) {
   return (
     <aside className="search-panel">
       <h3>Add games</h3>
-      <input
-        className="input"
-        type="search"
-        placeholder="Search games…"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setPage(1);
-        }}
-        aria-label="Search games"
-      />
+      <label className="search-field">
+        <MagnifyingGlass size={18} aria-hidden="true" />
+        <input
+          className="input"
+          type="search"
+          placeholder="Search games…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(1);
+          }}
+          aria-label="Search games"
+        />
+      </label>
       {error && <p className="error small">{error}</p>}
-      <div className="search-results">
+      <div className="search-results" aria-busy={loading}>
         {results.map((g) => {
           const added = isAdded(g.id);
           return (
@@ -78,12 +82,20 @@ export default function GameSearch({ onAdd, isAdded }) {
                   {[g.released?.slice(0, 4), g.genres.slice(0, 2).join(', ')].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              <span className="search-add">{added ? '✓' : '+'}</span>
+              <span className="search-add" aria-hidden="true">
+                {added ? <Check size={18} weight="bold" /> : <Plus size={18} weight="bold" />}
+              </span>
             </button>
           );
         })}
         {!loading && !error && results.length === 0 && <p className="muted small">No games found.</p>}
-        {loading && <p className="muted small">Searching…</p>}
+        {loading &&
+          Array.from({ length: results.length ? 2 : 6 }, (_, i) => (
+            <div className="search-result search-result-skeleton" key={`s${i}`} aria-hidden="true">
+              <span className="skeleton" />
+              <span className="skeleton skeleton-line" />
+            </div>
+          ))}
         {hasMore && !loading && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPage((p) => p + 1)}>
             Load more

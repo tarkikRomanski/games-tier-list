@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { ArrowSquareOut, CaretDown, CaretUp, FloppyDisk, Globe, LinkSimple, Lock, Plus, Trash, X } from '@phosphor-icons/react';
 import GameSearch from '../components/GameSearch.jsx';
 import GameTile from '../components/GameTile.jsx';
-import { TIER_PALETTE, emptyTierData, newId } from '../util.js';
+import { SkeletonBoard } from '../components/ui.jsx';
+import { TIER_PALETTE, emptyTierData, inkFor, newId } from '../util.js';
 
 const POOL = '__pool__';
+
+const VISIBILITY_OPTIONS = [
+  { value: 'private', label: 'Private', hint: 'Only you', Icon: Lock },
+  { value: 'unlisted', label: 'Unlisted', hint: 'Anyone with the link', Icon: LinkSimple },
+  { value: 'public', label: 'Public', hint: 'Shared with the community', Icon: Globe },
+];
 
 /** Move an item to a container (tier id or POOL), optionally before another item. Returns new data. */
 function moveItem(data, itemId, to, beforeId = null) {
@@ -194,7 +202,7 @@ export default function Editor() {
           removeItem(item.id);
         }}
       >
-        ×
+        <X size={12} weight="bold" aria-hidden="true" />
       </button>
     </GameTile>
   );
@@ -222,13 +230,25 @@ export default function Editor() {
     if (list) navigate(`/lists/${list.id}`);
   };
 
-  if (loading) return <p className="muted center">Loading…</p>;
-  if (loadError) return <div className="empty"><h2>{loadError}</h2><Link to="/my">Back to my lists</Link></div>;
+  if (loading) return <SkeletonBoard />;
+  if (loadError)
+    return (
+      <div className="empty">
+        <h2>{loadError}</h2>
+        <Link to="/my" className="btn">
+          Back to my lists
+        </Link>
+      </div>
+    );
 
   return (
     <div className="editor">
       <form className="editor-meta" onSubmit={save}>
+        <label className="sr-only" htmlFor="list-title">
+          Title
+        </label>
         <input
+          id="list-title"
           className="input input-title"
           placeholder="Tier list title, e.g. Best RPGs of all time"
           value={title}
@@ -239,7 +259,11 @@ export default function Editor() {
           }}
           required
         />
+        <label className="sr-only" htmlFor="list-description">
+          Description
+        </label>
         <textarea
+          id="list-description"
           className="input"
           rows={2}
           placeholder="Description (optional)"
@@ -251,31 +275,41 @@ export default function Editor() {
           }}
         />
         <div className="editor-actions">
-          <label className="field-inline">
-            Visibility
-            <select
-              className="input"
-              value={visibility}
-              onChange={(e) => {
-                setVisibility(e.target.value);
-                setDirty(true);
-              }}
-            >
-              <option value="private">Private — only you</option>
-              <option value="unlisted">Unlisted — anyone with the link</option>
-              <option value="public">Public — shared with the community</option>
-            </select>
-          </label>
+          <fieldset className="segmented">
+            <legend className="sr-only">Visibility</legend>
+            {VISIBILITY_OPTIONS.map(({ value, label, hint, Icon }) => (
+              <label key={value} className={visibility === value ? 'segmented-active' : ''} title={hint}>
+                <input
+                  type="radio"
+                  name="visibility"
+                  value={value}
+                  checked={visibility === value}
+                  onChange={() => {
+                    setVisibility(value);
+                    setDirty(true);
+                  }}
+                />
+                <Icon size={16} aria-hidden="true" />
+                {label}
+              </label>
+            ))}
+          </fieldset>
           <span className="spacer" />
-          {dirty && <span className="muted small">Unsaved changes</span>}
+          {dirty && <span className="unsaved small">Unsaved changes</span>}
           <button className="btn" type="submit" disabled={saving || !title.trim()}>
+            <FloppyDisk size={18} aria-hidden="true" />
             {saving ? 'Saving…' : 'Save'}
           </button>
           <button className="btn btn-primary" type="button" disabled={saving || !title.trim()} onClick={saveAndView}>
+            <ArrowSquareOut size={18} aria-hidden="true" />
             Save &amp; view
           </button>
         </div>
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
       </form>
 
       <div className="editor-layout">
@@ -286,7 +320,7 @@ export default function Editor() {
           <div className="board board-editable">
             {data.tiers.map((tier, i) => (
               <div className={`tier-row ${dropTarget === tier.id ? 'drop-active' : ''}`} key={tier.id}>
-                <div className="tier-label" style={{ background: tier.color }}>
+                <div className="tier-label" style={{ background: tier.color, color: inkFor(tier.color) }}>
                   <input
                     className="tier-label-input"
                     value={tier.label}
@@ -299,43 +333,48 @@ export default function Editor() {
                   {tier.items.map((item) => renderTile(item, tier.id))}
                 </div>
                 <div className="tier-controls">
-                  <input
-                    type="color"
-                    value={tier.color}
-                    aria-label="Tier color"
-                    onChange={(e) => editTier(tier.id, { color: e.target.value })}
-                  />
-                  <button type="button" className="icon-btn" onClick={() => moveTier(i, -1)} disabled={i === 0} aria-label="Move tier up">
-                    ▲
+                  <label className="swatch" style={{ background: tier.color }} title="Tier color">
+                    <input
+                      type="color"
+                      value={tier.color}
+                      aria-label="Tier color"
+                      onChange={(e) => editTier(tier.id, { color: e.target.value })}
+                    />
+                  </label>
+                  <button type="button" className="icon-btn icon-btn-sm" onClick={() => moveTier(i, -1)} disabled={i === 0} aria-label="Move tier up">
+                    <CaretUp size={16} weight="bold" />
                   </button>
                   <button
                     type="button"
-                    className="icon-btn"
+                    className="icon-btn icon-btn-sm"
                     onClick={() => moveTier(i, 1)}
                     disabled={i === data.tiers.length - 1}
                     aria-label="Move tier down"
                   >
-                    ▼
+                    <CaretDown size={16} weight="bold" />
                   </button>
                   <button
                     type="button"
-                    className="icon-btn"
+                    className="icon-btn icon-btn-sm"
                     onClick={() => deleteTier(tier.id)}
                     disabled={data.tiers.length <= 1}
                     aria-label="Delete tier"
                   >
-                    🗑
+                    <Trash size={16} />
                   </button>
                 </div>
               </div>
             ))}
           </div>
           <button type="button" className="btn btn-ghost btn-sm add-tier" onClick={addTier} disabled={data.tiers.length >= 20}>
-            + Add tier
+            <Plus size={16} weight="bold" aria-hidden="true" />
+            Add tier
           </button>
 
           <div className={`pool ${dropTarget === POOL ? 'drop-active' : ''}`}>
-            <h4>Unranked ({data.pool.length})</h4>
+            <h4>
+              Unranked <span className="count">{data.pool.length}</span>
+            </h4>
             <div className={`tier-items pool-items ${selectedId ? 'tier-items-target' : ''}`} {...dropZoneProps(POOL)}>
               {data.pool.length === 0 && <p className="muted small">Search for games to add them here, then drag them into tiers.</p>}
               {data.pool.map((item) => renderTile(item, POOL))}

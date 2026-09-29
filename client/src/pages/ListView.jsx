@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { ChatCircle, GitFork, Heart, Lock, PencilSimple, ShareNetwork, Trash, WarningCircle } from '@phosphor-icons/react';
 import TierBoard from '../components/TierBoard.jsx';
+import { Avatar, EmptyState, SkeletonBoard } from '../components/ui.jsx';
 import { VISIBILITY_LABELS, timeAgo } from '../util.js';
 
 function Comments({ listId, user }) {
@@ -43,26 +45,36 @@ function Comments({ listId, user }) {
 
   return (
     <section className="comments">
-      <h3>Comments ({comments.length})</h3>
+      <h2 className="section-title">
+        <ChatCircle size={22} aria-hidden="true" />
+        Comments <span className="count">{comments.length}</span>
+      </h2>
       {comments.map((c) => (
         <div className="comment" key={c.id}>
-          <div className="comment-head small">
-            <Link to={`/u/${c.author.username}`}>
-              <strong>{c.author.username}</strong>
-            </Link>
-            <span className="muted">{timeAgo(c.createdAt)}</span>
-            {c.canDelete && (
-              <button className="link-btn muted" onClick={() => remove(c.id)}>
-                delete
-              </button>
-            )}
+          <Avatar name={c.author.username} size="sm" />
+          <div className="comment-main">
+            <div className="comment-head small">
+              <Link to={`/u/${c.author.username}`}>
+                <strong>{c.author.username}</strong>
+              </Link>
+              <span className="muted">{timeAgo(c.createdAt)}</span>
+              {c.canDelete && (
+                <button type="button" className="icon-btn icon-btn-sm" onClick={() => remove(c.id)} aria-label="Delete comment" title="Delete comment">
+                  <Trash size={16} />
+                </button>
+              )}
+            </div>
+            <p className="comment-body">{c.body}</p>
           </div>
-          <p className="comment-body">{c.body}</p>
         </div>
       ))}
       {user ? (
-        <form onSubmit={submit} className="stack">
+        <form onSubmit={submit} className="stack comment-form">
+          <label className="sr-only" htmlFor="comment-body">
+            Your comment
+          </label>
           <textarea
+            id="comment-body"
             className="input"
             rows={3}
             placeholder="Agree? Disagree? Say why…"
@@ -81,7 +93,11 @@ function Comments({ listId, user }) {
           <Link to="/login">Log in</Link> to join the discussion.
         </p>
       )}
-      {error && <p className="error small">{error}</p>}
+      {error && (
+        <p className="error small" role="alert">
+          {error}
+        </p>
+      )}
     </section>
   );
 }
@@ -103,12 +119,21 @@ export default function ListView() {
     );
   }, [id, user?.id]);
 
-  if (error) return <div className="empty"><h2>{error}</h2><Link to="/">Back to the community</Link></div>;
-  if (!list) return <p className="muted center">Loading…</p>;
+  if (error)
+    return (
+      <EmptyState icon={WarningCircle} title={error} action={<Link to="/" className="btn">Back to the community</Link>} />
+    );
+  if (!list)
+    return (
+      <div className="list-view">
+        <div className="skeleton skeleton-title" />
+        <SkeletonBoard />
+      </div>
+    );
 
   const flash = (msg) => {
     setNotice(msg);
-    setTimeout(() => setNotice(''), 2500);
+    setTimeout(() => setNotice(''), 3500);
   };
   const requireLogin = () => navigate('/login', { state: { from: `/lists/${id}` } });
 
@@ -155,13 +180,17 @@ export default function ListView() {
   return (
     <article className="list-view">
       <header className="list-head">
-        <div>
+        <div className="list-head-main">
           <h1>{list.title}</h1>
-          <p className="muted small">
-            by <Link to={`/u/${list.author.username}`}>{list.author.username}</Link> · updated {timeAgo(list.updatedAt)} ·{' '}
-            {list.itemCount} games
+          <p className="list-meta">
+            <Link to={`/u/${list.author.username}`} className="author">
+              <Avatar name={list.author.username} size="sm" />
+              {list.author.username}
+            </Link>
+            <span className="muted">updated {timeAgo(list.updatedAt)}</span>
+            <span className="muted">{list.itemCount} games</span>
             {list.visibility !== 'public' && (
-              <span className={`badge badge-inline badge-${list.visibility}`}>{VISIBILITY_LABELS[list.visibility]}</span>
+              <span className={`badge badge-${list.visibility}`}>{VISIBILITY_LABELS[list.visibility]}</span>
             )}
           </p>
           {list.forkedFrom && (
@@ -173,38 +202,53 @@ export default function ListView() {
           {list.description && <p className="description">{list.description}</p>}
         </div>
         <div className="list-actions">
-          <button className={`btn ${list.likedByMe ? 'btn-liked' : ''}`} onClick={toggleLike} aria-pressed={list.likedByMe}>
-            ♥ {list.likeCount}
+          <button
+            type="button"
+            className={`btn ${list.likedByMe ? 'btn-liked' : ''}`}
+            onClick={toggleLike}
+            aria-pressed={list.likedByMe}
+            aria-label={`${list.likedByMe ? 'Unlike' : 'Like'} (${list.likeCount} likes)`}
+          >
+            <Heart size={18} weight={list.likedByMe ? 'fill' : 'regular'} aria-hidden="true" />
+            {list.likeCount}
           </button>
           {list.visibility !== 'private' && (
-            <button className="btn" onClick={share}>
+            <button type="button" className="btn" onClick={share}>
+              <ShareNetwork size={18} aria-hidden="true" />
               Share
             </button>
           )}
           {!list.isOwner && (
-            <button className="btn" onClick={remix} title="Copy this list into your account and make it your own">
+            <button type="button" className="btn" onClick={remix} title="Copy this list into your account and make it your own">
+              <GitFork size={18} aria-hidden="true" />
               Remix
             </button>
           )}
           {list.isOwner && (
             <>
               <Link className="btn btn-primary" to={`/lists/${id}/edit`}>
+                <PencilSimple size={18} aria-hidden="true" />
                 Edit
               </Link>
-              <button className="btn btn-danger" onClick={remove}>
-                Delete
+              <button type="button" className="icon-btn icon-btn-danger" onClick={remove} aria-label="Delete list" title="Delete list">
+                <Trash size={20} />
               </button>
             </>
           )}
         </div>
       </header>
-      {notice && <p className="notice">{notice}</p>}
       {list.isOwner && list.visibility === 'private' && (
-        <p className="notice">This list is private. Edit it and set visibility to Public to share it with the community.</p>
+        <p className="notice">
+          <Lock size={18} aria-hidden="true" />
+          This list is private. Edit it and set visibility to Public to share it with the community.
+        </p>
       )}
 
       <TierBoard data={list.data} />
       <Comments listId={list.id} user={user} />
+      <div className="toast-region" role="status" aria-live="polite">
+        {notice && <div className="toast">{notice}</div>}
+      </div>
     </article>
   );
 }
