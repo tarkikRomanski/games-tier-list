@@ -9,6 +9,17 @@ import MyLists from './pages/MyLists.jsx';
 import Editor from './pages/Editor.jsx';
 import ListView from './pages/ListView.jsx';
 import Profile from './pages/Profile.jsx';
+import Privacy from './pages/Privacy.jsx';
+import Terms from './pages/Terms.jsx';
+
+/** Start each new page at the top, unless the link points at a section on it. */
+function ScrollToTop() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [pathname, hash]);
+  return null;
+}
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -95,6 +106,7 @@ function Header() {
 export default function App() {
   return (
     <>
+      <ScrollToTop />
       <Header />
       <main className="container">
         <Routes>
@@ -106,9 +118,20 @@ export default function App() {
           <Route path="/lists/:id" element={<ListView />} />
           <Route path="/lists/:id/edit" element={<RequireAuth><Editor /></RequireAuth>} />
           <Route path="/u/:username" element={<Profile />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <footer className="site-footer">
+        <div className="site-footer-inner">
+          <span className="muted">Game Tiers</span>
+          <nav aria-label="Legal">
+            <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/terms">Terms of Service</Link>
+          </nav>
+        </div>
+      </footer>
     </>
   );
 }

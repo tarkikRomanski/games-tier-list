@@ -95,6 +95,13 @@ How it runs on Vercel: the built React app in `dist/` is served from Vercel's CD
 rewritten to one serverless function (`api/index.js`) that runs the same Express app as local development.
 Login rate limits are kept in memory, so on Vercel they apply per function instance.
 
+## Privacy Policy and Terms of Service
+
+`/privacy` and `/terms` are linked from the site footer and the sign-up page. Before launch, fill in the operator
+name, contact email and governing law in `client/src/legal.js`, and update `effectiveDate` whenever either page
+changes. If you change what data the app collects or which services it uses, update `client/src/pages/Privacy.jsx`
+to match.
+
 ## Tests
 
 ```bash
