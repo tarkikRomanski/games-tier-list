@@ -1429,6 +1429,132 @@ textarea.input {
   }
 }
 
+/* ---------- legal pages ---------- */
+.legal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  grid-template-areas: 'head toc' 'body toc';
+  column-gap: 3rem;
+  align-items: start;
+  max-width: 1040px;
+}
+.legal-head {
+  grid-area: head;
+  margin-bottom: 1.5rem;
+}
+.legal-head h1 {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  margin-bottom: 0.25rem;
+}
+.legal-intro {
+  font-size: 1.1rem;
+  max-width: 65ch;
+  margin: 1rem 0 0;
+}
+.legal-toc {
+  grid-area: toc;
+  position: sticky;
+  top: 88px;
+  padding: 1rem 1.1rem;
+  border-radius: var(--r-card);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-raised);
+}
+.legal-toc-title {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+  margin-bottom: 0.5rem;
+}
+.legal-toc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.legal-toc li + li {
+  margin-top: 0.35rem;
+}
+.legal-toc li::marker {
+  color: var(--color-muted-foreground);
+}
+.legal-body {
+  grid-area: body;
+  max-width: 70ch;
+}
+.legal-body section {
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--color-border);
+  scroll-margin-top: 80px;
+}
+.legal-body h2 {
+  font-size: 1.3rem;
+}
+.legal-body h3 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 1rem 0 0.25rem;
+}
+.legal-body p,
+.legal-body ul {
+  margin: 0.5rem 0;
+}
+.legal-body li + li {
+  margin-top: 0.4rem;
+}
+.legal-body code {
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--color-muted);
+}
+.legal-num {
+  color: var(--color-secondary);
+}
+.auth-legal {
+  margin: 0 0 0.75rem;
+  text-align: center;
+}
+.site-footer {
+  border-top: 1px solid var(--color-border);
+}
+.site-footer-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  font-size: 0.9rem;
+}
+.site-footer nav {
+  display: flex;
+  gap: 1.25rem;
+}
+.site-footer a {
+  color: var(--color-muted-foreground);
+}
+.site-footer a:hover {
+  color: var(--color-foreground);
+}
+@media (max-width: 860px) {
+  .legal {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'head' 'toc' 'body';
+  }
+  .legal-toc {
+    position: static;
+    margin-bottom: 1rem;
+  }
+}
+
 /* ---------- entrance motion ---------- */
 @media (prefers-reduced-motion: no-preference) {
   .grid > .card:not(.card-skeleton) {

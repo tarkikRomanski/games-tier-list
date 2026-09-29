@@ -89,6 +89,12 @@ export default function AuthPage({ mode }) {
           {busy ? 'Please wait…' : isLogin ? 'Log in' : 'Sign up'}
         </button>
       </form>
+      {!isLogin && (
+        <p className="muted small auth-legal">
+          By signing up you agree to our <Link to="/terms">Terms of Service</Link> and{' '}
+          <Link to="/privacy">Privacy Policy</Link>.
+        </p>
+      )}
       <p className="muted small auth-switch">
         {isLogin ? (
           <>No account yet? <Link to="/register" state={location.state}>Sign up</Link></>
