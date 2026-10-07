@@ -168,6 +168,8 @@ export default {
   // List page
   'list.updated': 'updated {time}',
   'list.gamesCount': { one: '{count} game', other: '{count} games' },
+  'list.views': { one: '{count} view', other: '{count} views' },
+  'list.viewsHint': 'Unique viewers, not counting the author',
   'list.remixedFrom': 'Remixed from {list} by {author}',
   'list.likeAria': { one: 'Like ({count} like)', other: 'Like ({count} likes)' },
   'list.unlikeAria': { one: 'Unlike ({count} like)', other: 'Unlike ({count} likes)' },

@@ -202,6 +202,8 @@ export default {
   // List page
   'list.updated': 'оновлено {time}',
   'list.gamesCount': { one: '{count} гра', few: '{count} гри', many: '{count} ігор', other: '{count} гри' },
+  'list.views': { one: '{count} перегляд', few: '{count} перегляди', many: '{count} переглядів', other: '{count} перегляду' },
+  'list.viewsHint': 'Унікальні глядачі, без урахування автора',
   'list.remixedFrom': 'Ремікс списку {list} від {author}',
   'list.likeAria': {
     one: 'Вподобати ({count} вподобання)',

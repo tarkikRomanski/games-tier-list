@@ -53,6 +53,15 @@ CREATE TABLE IF NOT EXISTS comments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_comments_list ON comments(list_id, created_at);
+
+-- One row per list and viewer, so the count is of unique viewers. \`viewer\` is 'u:<user id>' for a logged-in
+-- reader, or 'v:<SHA-256 of the visitor cookie>' for a logged-out one. The list's author is never recorded.
+CREATE TABLE IF NOT EXISTS list_views (
+  list_id    INTEGER NOT NULL REFERENCES tier_lists(id) ON DELETE CASCADE,
+  viewer     TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (list_id, viewer)
+);
 `;
 
 /**

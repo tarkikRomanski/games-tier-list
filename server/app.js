@@ -1,10 +1,12 @@
 import express from 'express';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   SESSION_COOKIE,
   SESSION_TTL_MS,
+  VISITOR_COOKIE,
+  VISITOR_TTL_MS,
   avatarUrl,
   createSession,
   destroySession,
@@ -62,6 +64,7 @@ const LIST_SELECT = `
   SELECT l.*, u.username AS author, u.display_name AS author_name, u.avatar_version AS author_avatar,
     (SELECT COUNT(*) FROM likes WHERE list_id = l.id) AS like_count,
     (SELECT COUNT(*) FROM comments WHERE list_id = l.id) AS comment_count,
+    (SELECT COUNT(*) FROM list_views WHERE list_id = l.id) AS view_count,
     EXISTS (SELECT 1 FROM likes WHERE list_id = l.id AND user_id = :viewer) AS liked
   FROM tier_lists l JOIN users u ON u.id = l.user_id`;
 
@@ -76,6 +79,7 @@ function listSummary(row) {
     author: authorJson(row.user_id, row.author, row.author_name, row.author_avatar),
     likeCount: row.like_count,
     commentCount: row.comment_count,
+    viewCount: row.view_count,
     likedByMe: Boolean(row.liked),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -102,6 +106,8 @@ export function createApp({
 
   const authLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 30 });
   const writeLimiter = rateLimiter({ windowMs: 60 * 1000, max: 60 });
+  // Caps how many new logged-out viewers one IP can add, so clearing cookies in a loop can't inflate counts.
+  const viewLimiter = rateLimiter({ windowMs: 60 * 60 * 1000, max: 30 });
 
   // Resolve the logged-in user from the session cookie.
   app.use('/api', async (req, _res, next) => {
@@ -408,6 +414,30 @@ export function createApp({
     await db.run('DELETE FROM likes WHERE user_id = ? AND list_id = ?', [req.user.id, row.id]);
     const { n } = await db.get('SELECT COUNT(*) AS n FROM likes WHERE list_id = ?', [row.id]);
     res.json({ liked: false, likeCount: n });
+  });
+
+  // ---------- Views ----------
+  const VISITOR_RE = /^[A-Za-z0-9_-]{22}$/;
+
+  // Called by the list page. Counts each viewer once per list; the author's own visits are not counted.
+  api.post('/lists/:id/views', async (req, res) => {
+    const row = await loadViewableList(req);
+    if (row.user_id !== req.user?.id) {
+      let viewer;
+      if (req.user) {
+        viewer = `u:${req.user.id}`;
+      } else if (viewLimiter(`ip:${req.ip}`)) {
+        let visitor = parseCookies(req.headers.cookie)[VISITOR_COOKIE];
+        if (!VISITOR_RE.test(visitor ?? '')) {
+          visitor = randomBytes(16).toString('base64url');
+          res.cookie(VISITOR_COOKIE, visitor, { httpOnly: true, sameSite: 'lax', secure: secureCookies, maxAge: VISITOR_TTL_MS, path: '/' });
+        }
+        viewer = `v:${createHash('sha256').update(visitor).digest('base64url')}`;
+      }
+      if (viewer) await db.run('INSERT OR IGNORE INTO list_views (list_id, viewer) VALUES (?, ?)', [row.id, viewer]);
+    }
+    const { n } = await db.get('SELECT COUNT(*) AS n FROM list_views WHERE list_id = ?', [row.id]);
+    res.json({ viewCount: n });
   });
 
   // ---------- Comments ----------

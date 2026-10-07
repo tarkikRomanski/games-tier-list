@@ -8,5 +8,5 @@ export const LEGAL = {
   /** Country or state whose law governs the Terms. Both the English and Ukrainian Terms show it as written. */
   jurisdiction: '[Country or state]',
   /** Date (YYYY-MM-DD) these versions of the documents take effect. Update it whenever either page changes. */
-  effectiveDate: '2026-09-29',
+  effectiveDate: '2026-10-07',
 };

@@ -6,6 +6,9 @@ const KEY_LEN = 64;
 
 export const SESSION_COOKIE = 'gtl_session';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Random id of a logged-out browser, used only to count each viewer of a list once. */
+export const VISITOR_COOKIE = 'gtl_visitor';
+export const VISITOR_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 export async function hashPassword(password) {
   const salt = randomBytes(16);
