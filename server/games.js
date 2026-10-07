@@ -3,14 +3,31 @@
 //  - FreeToGame (https://www.freetogame.com/api-doc): no key, but only free-to-play titles.
 // Every provider returns games in the same normalized shape:
 //   { id: "<source>:<id>", name, image, released, genres: [], platforms: [] }
+// and `details(sourceId)` adds { description, developers, publishers, metacritic, rating, website, url, screenshots },
+// or resolves to null when the catalogue has no such game.
 
 const PAGE_SIZE = 24;
 
-async function getJson(fetchImpl, url) {
+async function getJson(fetchImpl, url, { allowMissing = false } = {}) {
   const res = await fetchImpl(url, { headers: { accept: 'application/json' } });
+  if (allowMissing && res.status === 404) return null;
   if (!res.ok) throw new Error(`Upstream ${new URL(url).host} responded ${res.status}`);
   return res.json();
 }
+
+/** Upstream links end up in an href, so only http(s) URLs are passed through. */
+function safeUrl(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+const names = (list) => (Array.isArray(list) ? list.map((x) => x?.name).filter(Boolean) : []);
+const MAX_SCREENSHOTS = 4;
 
 export function rawgProvider({ apiKey, fetchImpl = fetch }) {
   const base = 'https://api.rawg.io/api';
@@ -36,6 +53,22 @@ export function rawgProvider({ apiKey, fetchImpl = fetch }) {
       }
       const data = await getJson(fetchImpl, `${base}/games?${params}`);
       return { results: (data.results || []).map(normalize), hasMore: Boolean(data.next) };
+    },
+    async details(sourceId) {
+      const params = new URLSearchParams({ key: apiKey });
+      const g = await getJson(fetchImpl, `${base}/games/${encodeURIComponent(sourceId)}?${params}`, { allowMissing: true });
+      if (!g?.id) return null;
+      return {
+        ...normalize(g),
+        description: g.description_raw?.trim() || null,
+        developers: names(g.developers),
+        publishers: names(g.publishers),
+        metacritic: Number.isFinite(g.metacritic) ? g.metacritic : null,
+        rating: g.rating > 0 ? g.rating : null,
+        website: safeUrl(g.website),
+        url: g.slug ? `https://rawg.io/games/${encodeURIComponent(g.slug)}` : null,
+        screenshots: [safeUrl(g.background_image_additional)].filter(Boolean),
+      };
     },
   };
 }
@@ -79,9 +112,54 @@ export function freeToGameProvider({ fetchImpl = fetch, ttlMs = 6 * 60 * 60 * 10
       const start = (page - 1) * PAGE_SIZE;
       return { results: matches.slice(start, start + PAGE_SIZE), hasMore: start + PAGE_SIZE < matches.length };
     },
+    async details(sourceId) {
+      const params = new URLSearchParams({ id: sourceId });
+      const g = await getJson(fetchImpl, `https://www.freetogame.com/api/game?${params}`, { allowMissing: true });
+      if (!g?.id) return null;
+      return {
+        ...normalize(g),
+        description: (g.description || g.short_description || '').trim() || null,
+        developers: g.developer ? [g.developer.trim()] : [],
+        publishers: g.publisher ? [g.publisher.trim()] : [],
+        metacritic: null,
+        rating: null,
+        website: safeUrl(g.game_url),
+        url: safeUrl(g.freetogame_profile_url),
+        screenshots: (g.screenshots || []).map((x) => safeUrl(x?.image)).filter(Boolean).slice(0, MAX_SCREENSHOTS),
+      };
+    },
+  };
+}
+
+/**
+ * Looks up a stored game id ("rawg:3498", "ftg:540") in the catalogue it came from, whichever one searches use.
+ * Answers (including "not found") are cached; failures are not, so a flaky upstream is retried next time.
+ */
+export function detailsResolver(providers, { ttlMs = 24 * 60 * 60 * 1000, max = 500 } = {}) {
+  const cache = new Map();
+  return async function details(id) {
+    const [source, sourceId] = String(id).split(':');
+    const provider = providers[source];
+    if (!provider?.details || !sourceId) return null;
+
+    const hit = cache.get(id);
+    if (hit && Date.now() - hit.at < ttlMs) return hit.value;
+    cache.delete(id);
+
+    const value = provider.details(sourceId).catch((err) => {
+      cache.delete(id);
+      throw err;
+    });
+    cache.set(id, { at: Date.now(), value });
+    // Map keeps insertion order, so the first key is the oldest entry.
+    if (cache.size > max) cache.delete(cache.keys().next().value);
+    return value;
   };
 }
 
 export function createGamesProvider(env = process.env) {
-  return env.RAWG_API_KEY ? rawgProvider({ apiKey: env.RAWG_API_KEY }) : freeToGameProvider();
+  const ftg = freeToGameProvider();
+  const rawg = env.RAWG_API_KEY ? rawgProvider({ apiKey: env.RAWG_API_KEY }) : null;
+  // Lists may hold games from either catalogue; RAWG ids resolve only while a key is configured.
+  return { ...(rawg ?? ftg), details: detailsResolver({ rawg, ftg }) };
 }

@@ -25,6 +25,7 @@ import {
   usernameBase,
 } from './google.js';
 import {
+  GAME_ID_RE,
   LIMITS,
   USERNAME_CHANGE_COOLDOWN_MS,
   ValidationError,
@@ -254,6 +255,21 @@ export function createApp({
       console.error('Game search failed:', err.message);
       throw new HttpError(502, 'The game catalogue is unavailable right now. You can still add games manually.');
     }
+  });
+
+  api.get('/games/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!GAME_ID_RE.test(id)) throw new HttpError(404, 'Game details not found');
+    let game;
+    try {
+      game = await games.details?.(id);
+    } catch (err) {
+      console.error('Game details failed:', err.message);
+      throw new HttpError(502, 'The game catalogue is unavailable right now');
+    }
+    if (!game) throw new HttpError(404, 'Game details not found');
+    res.set('cache-control', 'public, max-age=86400');
+    res.json({ game });
   });
 
   // ---------- Tier lists ----------

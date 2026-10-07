@@ -13,6 +13,8 @@ const EXACT = {
   'Google sign-in is not enabled': 'err.googleDisabled',
   'Could not pick a username, please try again': 'err.pickUsername',
   'The game catalogue is unavailable right now. You can still add games manually.': 'err.catalogueDown',
+  'The game catalogue is unavailable right now': 'err.catalogueUnavailable',
+  'Game details not found': 'err.gameNotFound',
   'Tier list not found': 'err.listNotFound',
   'Comment not found': 'err.commentNotFound',
   'User not found': 'err.userNotFound',

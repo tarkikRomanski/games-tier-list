@@ -8,6 +8,10 @@ const fakeGames = {
   async search(q) {
     return { results: [{ id: 'rawg:1', name: `Result for ${q}`, image: null, genres: [], platforms: [] }], hasMore: false };
   },
+  async details(id) {
+    if (id === 'rawg:500') throw new Error('upstream down');
+    return id === 'rawg:1' ? { id, name: 'Zelda', description: 'Adventure' } : null;
+  },
 };
 
 let server;
@@ -80,6 +84,17 @@ test('game search proxies the provider', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.results[0].name, 'Result for zelda');
   assert.equal(r.body.source.label, 'Fake');
+});
+
+test('game details come from the catalogue', async () => {
+  const get = client();
+  let r = await get('GET', '/games/rawg%3A1');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.game.name, 'Zelda');
+  assert.equal((await get('GET', '/games/rawg%3A2')).status, 404);
+  assert.equal((await get('GET', '/games/custom%3Aabc')).status, 404);
+  assert.equal((await get('GET', '/games/evil%3A1')).status, 404);
+  assert.equal((await get('GET', '/games/rawg%3A500')).status, 502);
 });
 
 test('tier list lifecycle, visibility, likes, comments, remix', async () => {

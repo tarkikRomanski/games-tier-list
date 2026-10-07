@@ -20,6 +20,9 @@ export const LIMITS = {
 
 export const USERNAME_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Stored game ids: "<catalogue>:<id in that catalogue>", or "custom:<random>" for games added by name. */
+export const GAME_ID_RE = /^(rawg|ftg|custom):[A-Za-z0-9_-]{1,64}$/;
+
 export const VISIBILITIES = ['private', 'unlisted', 'public'];
 
 export function cleanText(value, { field, max, min = 0 }) {
@@ -62,7 +65,7 @@ function validateImage(image) {
 function validateItem(item, seen) {
   if (!item || typeof item !== 'object') fail('Invalid game entry');
   const id = item.id;
-  if (typeof id !== 'string' || !/^(rawg|ftg|custom):[A-Za-z0-9_-]{1,64}$/.test(id)) fail('Invalid game id');
+  if (typeof id !== 'string' || !GAME_ID_RE.test(id)) fail('Invalid game id');
   if (seen.has(id)) fail('A game can only appear once in a tier list');
   seen.add(id);
   return {
