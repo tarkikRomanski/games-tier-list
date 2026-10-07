@@ -71,6 +71,12 @@ export function translate(lang, key, vars) {
   return interpolate(entry, vars);
 }
 
+/**
+ * A catalogue genre ("Shooter") in `lang`. Catalogue names are already English, so only other languages
+ * carry `genre.*` entries, and a genre missing from the dictionary keeps its catalogue name.
+ */
+export const translateGenre = (lang, name) => DICTIONARIES[lang]?.[`genre.${name}`] ?? name;
+
 /** Translate with the active language, for code that runs outside components. */
 export const t = (key, vars) => translate(currentLang, key, vars);
 

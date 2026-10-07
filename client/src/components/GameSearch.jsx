@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Check, MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import { newId } from '../util.js';
-import { useI18n } from '../i18n/index.jsx';
+import { translateGenre, useI18n } from '../i18n/index.jsx';
 
 /** Search the game catalogue and add results (or a custom entry) to the list. */
 export default function GameSearch({ onAdd, isAdded }) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [results, setResults] = useState([]);
@@ -81,7 +81,7 @@ export default function GameSearch({ onAdd, isAdded }) {
               <span className="search-result-text">
                 <strong>{g.name}</strong>
                 <span className="muted small">
-                  {[g.released?.slice(0, 4), g.genres.slice(0, 2).join(', ')].filter(Boolean).join(' · ')}
+                  {[g.released?.slice(0, 4), g.genres.slice(0, 2).map((x) => translateGenre(lang, x)).join(', ')].filter(Boolean).join(' · ')}
                 </span>
               </span>
               <span className="search-add" aria-hidden="true">

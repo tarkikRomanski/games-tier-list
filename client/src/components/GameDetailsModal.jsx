@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowSquareOut, Globe, Star, WarningCircle, X } from '@phosphor-icons/react';
 import { api } from '../api.js';
 import { formatDate, inkFor } from '../util.js';
-import { useI18n } from '../i18n/index.jsx';
+import { translateGenre, useI18n } from '../i18n/index.jsx';
 
 const SOURCES = { rawg: 'RAWG', ftg: 'FreeToGame' };
 const DESCRIPTION_PREVIEW = 420;
@@ -63,7 +63,7 @@ function Description({ text }) {
  * `item` is what the list stores ({ id, name, image }); the rest is fetched from the game catalogue.
  */
 export default function GameDetailsModal({ item, tier, onClose }) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const dialogRef = useRef(null);
   const catalogue = isCatalogueGame(item.id);
   const [state, setState] = useState({ status: catalogue ? 'loading' : 'custom', game: null });
@@ -163,7 +163,7 @@ export default function GameDetailsModal({ item, tier, onClose }) {
               <Facts
                 items={[
                   [t('game.released'), game.released && formatDate(game.released)],
-                  [t('game.genres'), game.genres],
+                  [t('game.genres'), game.genres.map((g) => translateGenre(lang, g))],
                   [t('game.platforms'), game.platforms],
                   [t('game.developers'), game.developers],
                   [t('game.publishers'), game.publishers],
