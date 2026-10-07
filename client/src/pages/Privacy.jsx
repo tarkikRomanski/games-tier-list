@@ -56,6 +56,11 @@ const SECTIONS_EN = [
             forgery.
           </li>
           <li>
+            <code>gtl_visitor</code>: a random id set when you open someone else&apos;s tier list while logged out, so
+            the list&apos;s view count counts you once. We store only a one-way hash of it, it isn&apos;t linked to anything
+            else about you, and it expires after a year.
+          </li>
+          <li>
             <code>theme</code> and <code>lang</code> (browser local storage): remember the theme and language you
             chose. They never leave your browser.
           </li>
@@ -233,6 +238,11 @@ const SECTIONS_UK = [
           <li>
             <code>gtl_oauth</code>: встановлюється щонайбільше на 10 хвилин під час входу через Google, щоб захистити вхід
             від підробки.
+          </li>
+          <li>
+            <code>gtl_visitor</code>: випадковий ідентифікатор, який встановлюється, коли ви без входу відкриваєте чужий
+            тір-лист, щоб лічильник переглядів урахував вас лише раз. Ми зберігаємо тільки його незворотний хеш, він не
+            пов’язаний з жодними іншими даними про вас і діє рік.
           </li>
           <li>
             <code>theme</code> і <code>lang</code> (локальне сховище браузера): запам’ятовують вибрані тему та мову. Ці

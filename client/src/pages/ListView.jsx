@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { ChatCircle, GitFork, Heart, Lock, PencilSimple, ShareNetwork, Trash, WarningCircle } from '@phosphor-icons/react';
+import { ChatCircle, Eye, GitFork, Heart, Lock, PencilSimple, ShareNetwork, Trash, WarningCircle } from '@phosphor-icons/react';
 import TierBoard from '../components/TierBoard.jsx';
 import { Avatar, EmptyState, SkeletonBoard } from '../components/ui.jsx';
 import { displayNameOf, timeAgo } from '../util.js';
@@ -122,6 +122,19 @@ export default function ListView() {
     );
   }, [id, user?.id]);
 
+  // Record this visit once the list is known to be someone else's. The server ignores repeat viewers.
+  const listId = list?.id;
+  const isOwner = list?.isOwner;
+  useEffect(() => {
+    if (!listId || isOwner) return;
+    api.post(`/lists/${listId}/views`).then(
+      (r) => setList((l) => (l?.id === listId ? { ...l, viewCount: r.viewCount } : l)),
+      () => {
+        /* a missed view isn't worth bothering the reader about */
+      },
+    );
+  }, [listId, isOwner]);
+
   if (error)
     return (
       <EmptyState icon={WarningCircle} title={error} action={<Link to="/" className="btn">{t('common.backToCommunity')}</Link>} />
@@ -192,6 +205,10 @@ export default function ListView() {
             </Link>
             <span className="muted">{t('list.updated', { time: timeAgo(list.updatedAt) })}</span>
             <span className="muted">{t('list.gamesCount', { count: list.itemCount })}</span>
+            <span className="muted list-views" title={t('list.viewsHint')}>
+              <Eye size={16} aria-hidden="true" />
+              {t('list.views', { count: list.viewCount })}
+            </span>
             {list.visibility !== 'public' && (
               <span className={`badge badge-${list.visibility}`}>{t(`visibility.${list.visibility}`)}</span>
             )}

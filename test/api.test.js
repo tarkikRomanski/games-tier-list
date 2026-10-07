@@ -8,6 +8,10 @@ const fakeGames = {
   async search(q) {
     return { results: [{ id: 'rawg:1', name: `Result for ${q}`, image: null, genres: [], platforms: [] }], hasMore: false };
   },
+  async details(id) {
+    if (id === 'rawg:500') throw new Error('upstream down');
+    return id === 'rawg:1' ? { id, name: 'Zelda', description: 'Adventure' } : null;
+  },
 };
 
 let server;
@@ -80,6 +84,39 @@ test('game search proxies the provider', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.results[0].name, 'Result for zelda');
   assert.equal(r.body.source.label, 'Fake');
+});
+
+test('game details come from the catalogue', async () => {
+  const get = client();
+  let r = await get('GET', '/games/rawg%3A1');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.game.name, 'Zelda');
+  assert.equal((await get('GET', '/games/rawg%3A2')).status, 404);
+  assert.equal((await get('GET', '/games/custom%3Aabc')).status, 404);
+  assert.equal((await get('GET', '/games/evil%3A1')).status, 404);
+  assert.equal((await get('GET', '/games/rawg%3A500')).status, 502);
+});
+
+test('views count unique readers and never the author', async () => {
+  const owner = client();
+  const reader = client();
+  const anon = client();
+  const anon2 = client();
+  await owner('POST', '/auth/register', { username: 'viewowner', password: 'password123' });
+  await reader('POST', '/auth/register', { username: 'viewreader', password: 'password123' });
+  const { body } = await owner('POST', '/lists', { title: 'Viewed', visibility: 'unlisted', data: sampleData });
+  const path = `/lists/${body.list.id}/views`;
+
+  assert.equal((await owner('POST', path, {})).body.viewCount, 0);
+  assert.equal((await reader('POST', path, {})).body.viewCount, 1);
+  assert.equal((await reader('POST', path, {})).body.viewCount, 1);
+  assert.equal((await anon('POST', path, {})).body.viewCount, 2);
+  assert.equal((await anon('POST', path, {})).body.viewCount, 2, 'the visitor cookie identifies a returning reader');
+  assert.equal((await anon2('POST', path, {})).body.viewCount, 3);
+  assert.equal((await owner('GET', `/lists/${body.list.id}`)).body.list.viewCount, 3);
+
+  const priv = await owner('POST', '/lists', { title: 'Hidden', visibility: 'private', data: sampleData });
+  assert.equal((await reader('POST', `/lists/${priv.body.list.id}/views`, {})).status, 404);
 });
 
 test('tier list lifecycle, visibility, likes, comments, remix', async () => {
